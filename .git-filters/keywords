@@ -1,0 +1,211 @@
+#!/bin/sh
+############################################################ IDENT(1)
+#
+# $Title: Filter to expand/delete keywords before/after commit (respectively) $
+#
+############################################################ INFORMATION
+#
+# System requirements: awk(1) date(1) file(1) git(1) printf(1)* rm(1)
+# * Most sh(1) variations implement printf as built-in.
+#
+############################################################ CONFIGURATION
+
+#
+# List of keywords to expand/delete (separated by whitespace)
+#
+KEYWORDS="
+	Author
+	Branch
+	Date
+	FrauBSD
+	Header
+	Origin
+	Project
+	RCSfile
+	Source
+" # END-QUOTE
+
+#
+# Pre-expanded keyword values
+# NB: $file is actual filename while $gitfile uses escape-sequences
+#
+_Author='$NAME'
+_Branch='$BRANCH'
+_Date='$DATE'
+_FrauBSD='${REPO#*FrauBSD/}/$gitfile $DATE $NAME'
+_Header='$gitfile $DATE $NAME'
+_Origin='$ORIGIN'
+_Project='$PROJECT'
+_RCSfile='${gitfile##*/}'
+_Source='$gitfile'
+
+############################################################ GLOBALS
+
+#
+# Required parts
+#
+NAME=$( git config user.name ) DATE=$( date +"%F %T %z" )
+: ${NAME:=unknown} ${DATE:=0000-00-00 00:00:00 -0000}
+
+#
+# Command-line options
+#
+DELETE=		# -d
+
+#
+# Miscellaneous
+#
+TMPFILE="/tmp/${0##*/}.$$"
+
+############################################################ FUNCTIONS
+
+DEBUG()
+{
+	local fmt="$1"
+	[ ! "$DEBUG" ] && return
+	[ ! "$fmt" ] && return
+	shift 1 # fmt
+	printf "DEBUG: $fmt\n" "$@"
+}
+
+############################################################ MAIN
+
+#
+# Command-line options
+#
+while getopts d flag; do
+	case "$flag" in
+	d) DELETE=1 ;;
+	esac
+done
+shift $(( $OPTIND - 1 ))
+
+#
+# Get origin URL
+#
+ORIGIN=$( git config remote.origin.url )
+
+#
+# Repository name
+#
+PROJECT="${ORIGIN##*:}"
+REPO="${PROJECT%.[Gg][Ii][Tt]}"
+
+#
+# Get current branch name (required by `-d' to delete keywords)
+#
+IFS= read -r BRANCH <<EOF
+$( git branch | awk 'sub(/^\*[[:space:]]+/,"")' )
+EOF
+: ${BRANCH:=master}
+
+#
+# Remaining arguments are files to be operated on
+#
+trap 'rm -f "$TMPFILE" > /dev/null 2>&1' EXIT
+for file in "$@"; do
+	[ -e "$file" -a ! -d "$file" ] || continue
+	gitfile=$( git diff --cached --name-only -- "$file" )
+
+	#
+	# Only operate on files we know to be safe
+	#
+	case "$( file -b "$file" 2> /dev/null )" in
+		*ASCII*text*) : fall through ;;
+		*script*text*) : fall through ;;
+		*source*text*) : fall through ;;
+		*program*text*) : fall through ;;
+		*document*text) : fall through ;;
+		*)
+			DEBUG "$gitfile (skipped)"
+			continue
+	esac
+
+	#
+	# Expand keywords (`-d' resets values to branch context)
+	#
+	if [ "$DELETE" ]; then
+		for keyword in $KEYWORDS; do
+			regex="\\\$$keyword: [^$]+\\\$"
+			read value <<-EOF
+			$( git grep -hIE "$regex" "$BRANCH" -- "$file" )
+			EOF
+			case "$value" in
+			"") eval $keyword="\"\\\$$keyword\\\$\"" ;;
+			 *) value="${value#*\$$keyword: }"
+			    value="\$$keyword: ${value%%\$*}\$"
+			    eval $keyword='"$value"'
+			esac
+		done
+	else
+		for keyword in $KEYWORDS; do
+			eval value=\"\$_$keyword\"
+			eval $keyword=\"\\\$$keyword:\ $value\ \\\$\"
+		done
+	fi
+
+	#
+	# For debugging purposes, show which edits are going to be made
+	#
+	needs_editing=
+	[ "$DEBUG" ] && print_file_debug=1
+	for keyword in $KEYWORDS; do
+		if [ "$print_file_debug" ]; then
+			print_file_debug=
+			printf "DEBUG: %s " "$gitfile"
+		fi
+		awk '/\$'$keyword'(: [^$]*)?\$/ { exit found++ }
+			END { exit !found }' "$file" || continue
+		needs_editing=1
+		[ "$DEBUG" ] && echo "(edit)"
+		break
+	done
+	if [ ! "$needs_editing" ]; then
+		[ "$DEBUG" ] && echo "(no keywords)"
+		continue
+	fi
+
+	#
+	# Edit the file, optionally with debug information
+	#
+	status=U+
+	[ "$DELETE" ] && status=U-
+	cp -f "$file" "$TMPFILE" || exit
+	while IFS= read -r LINE; do
+		for keyword in $KEYWORDS; do
+			line_modified=
+			eval value=\"\$$keyword\"
+			case "$LINE" in
+			*"\$$keyword: "*'$'*)
+				L="${LINE%%\$$keyword: *}"
+				R="${LINE#"$L\$$keyword: "}"
+				R="${R#*\$}"
+				LINE="$L$value$R"
+				line_modified=1 ;;
+			*"\$$keyword\$"*)
+				L="${LINE%%\$$keyword\$*}"
+				R="${LINE#"$L\$$keyword\$"}"
+				LINE="$L$value$R"
+				line_modified=1 ;;
+			esac
+			if [ "$line_modified" ]; then
+				if [ "$DEBUG" ]; then
+					echo " $value" >&3
+				else
+					printf "%-3s %-8s %s\n" "$status" \
+						"$keyword" "$gitfile" >&3
+				fi
+			fi
+		done
+		printf "%s\n" "$LINE"
+	done < "$TMPFILE" 3>&1 > "$file"
+done
+
+################################################################################
+# END
+################################################################################
+#
+# $Copyright: 2015-2019 The FrauBSD Project. All rights reserved. $
+# $FrauBSD: nfsdtop/.git-filters/keywords 2020-03-04 15:58:16 -0800 freebsdfrau $
+#
+################################################################################

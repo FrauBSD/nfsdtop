@@ -1,0 +1,27 @@
+#!/bin/sh
+############################################################ IDENT(1)
+#
+# $Title: Hook to run after a successful `git commit' $
+#
+############################################################ INFORMATION
+#
+# System requirements: git(1) xargs(1) ls(1)
+#
+############################################################ MAIN
+
+DEBUG(){ [ ! "$DEBUG" ] || echo "DEBUG: $*"; }
+DEBUG "$0 $*"
+
+# Do a simple `ls -l' of recently committed files
+DEBUG "Listing committed files..."
+git diff-tree --name-only -z -r HEAD~1..HEAD | xargs -0 ls -l --
+DEBUG "End List"
+
+################################################################################
+# END
+################################################################################
+#
+# $Copyright: 2015-2017 The FrauBSD Project. All rights reserved. $
+# $FrauBSD: nfsdtop/.git-hooks/post-commit 2020-03-04 15:58:16 -0800 freebsdfrau $
+#
+################################################################################

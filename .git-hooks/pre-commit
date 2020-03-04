@@ -1,0 +1,33 @@
+#!/bin/sh
+############################################################ IDENT(1)
+#
+# $Title: Hook to run before `git commit' $
+#
+############################################################ INFORMATION
+#
+# System requirements: git(1) xargs(1)
+# See also: .git-filters/keywords
+#
+############################################################ MAIN
+
+DEBUG(){ [ ! "$DEBUG" ] || echo "DEBUG: $*"; }
+DEBUG "$0 $*"
+
+# Set keywords in modified text-files prior to commit
+DEBUG "Keyword modifications..."
+git diff --cached --name-only -z --diff-filter=ACM |
+	xargs -0 .git-filters/keywords --
+DEBUG "End List"
+
+# Update the staging files
+git diff --cached --name-only -z --diff-filter=ACM |
+	xargs -0 git add -u -v --
+
+################################################################################
+# END
+################################################################################
+#
+# $Copyright: 2015-2017 The FrauBSD Project. All rights reserved. $
+# $FrauBSD: nfsdtop/.git-hooks/pre-commit 2020-03-04 15:58:16 -0800 freebsdfrau $
+#
+################################################################################
