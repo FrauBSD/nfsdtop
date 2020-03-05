@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-05 15:24:35 -0800 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-05 15:25:55 -0800 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 0.5-beta-8 $'
+VERSION='$Version: 0.5 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -207,9 +207,10 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		}
 
 		if (!raw_view) {
-			clear()
-			print_header()
-			print "Waiting for bpftrace to initialize ..."
+			clear_buffer()
+			buffer_add_header()
+			buffer_add("Waiting for bpftrace to initialize ...\n")
+			print_buffer()
 			if (!no_names) load_files()
 		}
 
@@ -223,19 +224,27 @@ run_bpftrace /dev/stdin <<EOF | awk \
 
 	######################################## FUNCTIONS
 
-	function clear() { printf "\033[H\033[J" }
+	function buffer_add(text) { BUFFER = BUFFER text }
+	function print_buffer() { printf "%s", BUFFER }
 
-	function print_header()
+	function clear_buffer()
 	{
-		printf "Interval: %-*s %31s\n",
+		BUFFER = ""
+		buffer_add(sprintf("\033[H\033[J"))
+	}
+
+	function buffer_add_header()
+	{
+		buffer_add(sprintf("Interval: %-*s %31s\n",
 			fmtsz - 9 - 2 - 31,
 			sprintf("%.3f", interval) "s",
-			strftime("%c",systime())
+			strftime("%c",systime())))
 				#  9 = "Interval:"
 				#  2 = number of spaces
 				# 31 = %31s = date
-		printf "\033[7m" fmt "\033[27m", view, "TOTAL",
-			"WRITE(IN)", bar_size, "", bar_size, "", "READ(OUT)"
+		buffer_add(sprintf("\033[7m" fmt "\033[27m", view,
+			"TOTAL", "WRITE(IN)", bar_size, "", bar_size, "",
+			"READ(OUT)"))
 	}
 
 	function load_files()
@@ -309,8 +318,8 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	}
 
 	/^===$/ {
-		clear()
-		print_header()
+		clear_buffer()
+		buffer_add_header()
 		next
 	}
 
@@ -354,9 +363,10 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		read_bar = ""
 		write_rate = write_total / interval
 		write_bar = ""
-		printf fmt, "total", humanize(write_rate + read_rate),
+		buffer_add(sprintf(fmt, "total",
+			humanize(write_rate + read_rate),
 			humanize(write_rate), bar_size, write_bar,
-			bar_size, read_bar, humanize(read_rate)
+			bar_size, read_bar, humanize(read_rate)))
 
 		# Sort values, extract cred, and print
 		table_rows = rows - 4
@@ -396,11 +406,12 @@ run_bpftrace /dev/stdin <<EOF | awk \
 				}
 			}
 
-			printf fmt, cred, humanize(write_rate + read_rate),
+			buffer_add(sprintf(fmt, cred,
+				humanize(write_rate + read_rate),
 				humanize(write_rate), bar_size, write_bar,
-				bar_size, read_bar, humanize(read_rate)
+				bar_size, read_bar, humanize(read_rate)))
 		}
-		if (i > 0) printf "(%d more) ... ", i
+		if (i > 0) buffer_add(sprintf("(%d more) ... ", i))
 
 		# Clean up
 		delete creds
@@ -409,6 +420,7 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		delete read_write
 		delete read_write_sorted
 
+		print_buffer()
 		next
 	}
 
