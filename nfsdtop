@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-05 15:16:14 -0800 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-05 15:19:17 -0800 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 0.5-beta-4 $'
+VERSION='$Version: 0.5-beta-5 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -30,6 +30,7 @@ FAILURE=1
 #
 # Command-line options
 #
+DEBUG=					# -d
 FILE_VIEW=				# -f
 GROUP_MAP="$DEFAULT_GROUP_MAP"		# -P file
 GROUP_VIEW=				# -g
@@ -69,8 +70,9 @@ usage()
 		printf "%s: $fmt\n" "$pgm" "$@"
 	fi
 
-	printf "Usage: %s [-fghruvw] [-i sec] [-P file] [-p file]\n" "$pgm"
+	printf "Usage: %s [-dfghruvw] [-i sec] [-P file] [-p file]\n" "$pgm"
 	printf "Options:\n"
+	printf "$optfmt" "-d" "Debug. Print bpftrace script and exit."
 	printf "$optfmt" "-f" "View read/write activity by file. Implies \`-w'."
 	printf "$optfmt" "-g" "View read/write activity by group."
 	printf "$optfmt" "-h" "Print usage statement and exit."
@@ -87,13 +89,23 @@ usage()
 	exit $FAILURE
 }
 
+run_bpftrace()
+{
+	if [ "$DEBUG" ]; then
+		cat "$@"
+	else
+		exec bpftrace "$@"
+	fi
+}
+
 ############################################################ MAIN
 
 #
 # Parse command-line options
 #
-while getopts fghi:nP:p:ruvw flag; do
+while getopts dfghi:nP:p:ruvw flag; do
 	case "$flag" in
+	d) DEBUG=1 RAW_VIEW=1 ;;
 	f) FILE_VIEW=1 WIDE_VIEW=1 GROUP_VIEW= USER_VIEW= ;;
 	g) GROUP_VIEW=1 FILE_VIEW= USER_VIEW= ;;
 	i) INTERVAL="$OPTARG" ;;
@@ -151,7 +163,7 @@ fi
 #
 # Trace nfsd I/O
 #
-bpftrace /dev/stdin <<EOF | awk \
+run_bpftrace /dev/stdin <<EOF | awk \
 	-v cols=$cols \
 	-v file_view=${FILE_VIEW:-0} \
 	-v group_map="$GROUP_MAP" \
