@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-05 15:22:54 -0800 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-05 15:24:35 -0800 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 0.5-beta-7 $'
+VERSION='$Version: 0.5-beta-8 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -192,6 +192,10 @@ run_bpftrace /dev/stdin <<EOF | awk \
 			# 36 = 3 x %12s
 			#  4 = number of spaces
 			#  1 = balance odd cols
+		fmtsz = vsz + 36 + 4 + int(bar_size) * 2 + 1
+			# 36 = 3 x %12s
+			#  4 = number of spaces
+			#  1 = "|" between bars
 
 		# Column headers
 		if (file_view) {
@@ -223,7 +227,13 @@ run_bpftrace /dev/stdin <<EOF | awk \
 
 	function print_header()
 	{
-		printf "%s\n\n",strftime("%c",systime())
+		printf "Interval: %-*s %31s\n",
+			fmtsz - 9 - 2 - 31,
+			sprintf("%.3f", interval) "s",
+			strftime("%c",systime())
+				#  9 = "Interval:"
+				#  2 = number of spaces
+				# 31 = %31s = date
 		printf "\033[7m" fmt "\033[27m", view, "TOTAL",
 			"WRITE(IN)", bar_size, "", bar_size, "", "READ(OUT)"
 	}
