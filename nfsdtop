@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-05 15:12:53 -0800 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-05 15:16:14 -0800 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 0.5-beta-3 $'
+VERSION='$Version: 0.5-beta-4 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -37,6 +37,7 @@ INTERVAL=$DEFAULT_INTERVAL		# -i sec
 NO_NAMES=				# -n
 PASSWD_MAP="$DEFAULT_PASSWD_MAP"	# -p file
 RAW_VIEW=				# -r
+USER_VIEW=1				# -u (default)
 WIDE_VIEW=				# -w
 
 #
@@ -68,7 +69,7 @@ usage()
 		printf "%s: $fmt\n" "$pgm" "$@"
 	fi
 
-	printf "Usage: %s [-fghrvw] [-i sec] [-P file] [-p file]\n" "$pgm"
+	printf "Usage: %s [-fghruvw] [-i sec] [-P file] [-p file]\n" "$pgm"
 	printf "Options:\n"
 	printf "$optfmt" "-f" "View read/write activity by file. Implies \`-w'."
 	printf "$optfmt" "-g" "View read/write activity by group."
@@ -79,6 +80,7 @@ usage()
 	printf "$optfmt" "-P file" "Group map file. Default \`$GROUP_MAP'."
 	printf "$optfmt" "-p file" "User map file. Default \`$PASSWD_MAP'."
 	printf "$optfmt" "-r" "Raw view. Do not format output of bpftrace."
+	printf "$optfmt" "-u" "View read/write activity by user (default)."
 	printf "$optfmt" "-v" "Print version and exit."
 	printf "$optfmt" "-w" "Wide view. Maximize width of first column."
 
@@ -90,15 +92,16 @@ usage()
 #
 # Parse command-line options
 #
-while getopts fghi:nP:p:rvw flag; do
+while getopts fghi:nP:p:ruvw flag; do
 	case "$flag" in
-	f) FILE_VIEW=1 WIDE_VIEW=1 GROUP_VIEW= ;;
-	g) GROUP_VIEW=1 FILE_VIEW= ;;
+	f) FILE_VIEW=1 WIDE_VIEW=1 GROUP_VIEW= USER_VIEW= ;;
+	g) GROUP_VIEW=1 FILE_VIEW= USER_VIEW= ;;
 	i) INTERVAL="$OPTARG" ;;
 	n) NO_NAMES=1 ;;
 	P) GROUP_MAP="$OPTARG" ;;
 	p) PASSWD_MAP="$OPTARG" ;;
 	r) RAW_VIEW=1 ;;
+	u) USER_VIEW=1 FILE_VIEW= GROUP_VIEW= ;;
 	v) VERSION="${VERSION#*: }"
 		echo "${VERSION% $}"
 		exit $SUCCESS ;;
@@ -158,6 +161,7 @@ bpftrace /dev/stdin <<EOF | awk \
 	-v passwd_map="$PASSWD_MAP" \
 	-v raw_view=${RAW_VIEW:-0} \
 	-v rows=$rows \
+	-v user_view=${USER_VIEW:-0} \
 	-v wide_view=${WIDE_VIEW:-0} \
 	'####################################### BEGIN
 
@@ -176,7 +180,7 @@ bpftrace /dev/stdin <<EOF | awk \
 			view = "FILE"
 		} else if (group_view) {
 			view = "GROUP"
-		} else {
+		} else { # Default
 			view = "USER"
 		}
 
@@ -292,7 +296,7 @@ bpftrace /dev/stdin <<EOF | awk \
 			cred = path
 		} else if (group_view) {
 			cred = gid
-		} else {
+		} else { # Default
 			cred = uid
 		}
 		creds[cred]
@@ -354,7 +358,7 @@ bpftrace /dev/stdin <<EOF | awk \
 				if (group_view) {
 					if (cred in gid2name)
 						cred = gid2name[cred]
-				} else if (!file_view) {
+				} else if (user_view) {
 					if (cred in uid2name)
 						cred = uid2name[cred]
 				}
