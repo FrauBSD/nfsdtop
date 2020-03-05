@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-05 15:19:17 -0800 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-05 15:21:55 -0800 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 0.5-beta-5 $'
+VERSION='$Version: 0.5-beta-6 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -179,13 +179,19 @@ run_bpftrace /dev/stdin <<EOF | awk \
 
 	BEGIN {
 		if (wide_view) {
-			vsz = cols - 36 - 5 - 21 # Maximize view column
+			vsz = cols - 36 - 4 - 21 # Maximize view column
+				# 36 = 3 x %12s
+				#  4 = number of spaces
+				# 21 = minimum bar size
 		} else {
 			vsz = 15 # Maximize bar column
 		}
 
 		fmt = "%-"vsz"s %12s %12s %*s|%-*s %-12s\n"
-		bar_size = (cols - vsz - 5 - 36) / 2 - 1
+		bar_size = (cols - vsz - 36 - 4 - 1) / 2
+			# 36 = 3 x %12s
+			#  4 = number of spaces
+			#  1 = balance odd cols
 
 		# Column headers
 		if (file_view) {
@@ -343,7 +349,7 @@ run_bpftrace /dev/stdin <<EOF | awk \
 			bar_size, read_bar, humanize(read_rate)
 
 		# Sort values, extract cred, and print
-		table_rows = rows - 5
+		table_rows = rows - 4
 		r = 1
 		n = _asort(read_write, read_write_sorted)
 		for (i = n; i >= 1 && r++ <= table_rows; i--) {
