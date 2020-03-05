@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-05 13:15:35 -0800 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-05 15:09:21 -0800 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 0.4 $'
+VERSION='$Version: 0.5-beta-1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -90,12 +90,14 @@ usage()
 #
 # Parse command-line options
 #
-while getopts fghi:nrvw flag; do
+while getopts fG:ghi:nP:rvw flag; do
 	case "$flag" in
 	f) FILE_VIEW=1 WIDE_VIEW=1 GROUP_VIEW= ;;
+	G) GROUP_MAP="$OPTARG" ;;
 	g) GROUP_VIEW=1 FILE_VIEW= ;;
 	i) INTERVAL="$OPTARG" ;;
 	n) NO_NAMES=1 ;;
+	P) PASSWD_MAP="$OPTARG" ;;
 	r) RAW_VIEW=1 ;;
 	v) VERSION="${VERSION#*: }"
 		echo "${VERSION% $}"
