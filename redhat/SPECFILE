@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 0.4
+Version: 0.5
 Release: 1
 Buildarch: noarch
 
@@ -75,6 +75,16 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Thu Mar  5 2020 Devin Teske <dteske@fraubsd.org> 0.5-1
+- 5d46d31 Make screen redraws smoother
+- bfe3f78 Print the interval atop the header
+- bfdcc05 Add ANSI coloring to header
+- a15c56d Maximize display rows/columns
+- c54c32b Add -d for debugging bpftrace script
+- 2c141eb Add -u (default) for user view
+- 4a9b70b Quote group/passwd variable expansion
+- b3e76a0 Change -P to -p and -G to -P
+- 0e155cd Fix `-G file' and `-P file' arguments
 * Thu Mar  5 2020 Devin Teske <dteske@fraubsd.org> 0.4-1
 - Add -w for wide view (maximizes width of first column)
 - Add -r for raw view (do not format output of bpftrace)
