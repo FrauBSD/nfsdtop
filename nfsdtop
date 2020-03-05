@@ -3,11 +3,11 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-04 15:59:24 -0800 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-05 13:15:35 -0800 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
-DEFAULT_INTERVAL=3 # seconds
+DEFAULT_INTERVAL=2 # seconds
 
 #
 # User/Group map files
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 0.3.1 $'
+VERSION='$Version: 0.4 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -30,11 +30,14 @@ FAILURE=1
 #
 # Command-line options
 #
+FILE_VIEW=			# -f
 GROUP_MAP=$DEFAULT_GROUP_MAP	# -G file
 GROUP_VIEW=			# -g
 INTERVAL=$DEFAULT_INTERVAL	# -i sec
 NO_NAMES=			# -n
 PASSWD_MAP=$DEFAULT_PASSWD_MAP	# -P file
+RAW_VIEW=			# -r
+WIDE_VIEW=			# -w
 
 #
 # Miscellaneous
@@ -65,16 +68,19 @@ usage()
 		printf "%s: $fmt\n" "$pgm" "$@"
 	fi
 
-	printf "Usage: %s [-ghv] [-G file] [-i sec] [-P file]\n" "$pgm"
+	printf "Usage: %s [-fghrvw] [-G file] [-i sec] [-P file]\n" "$pgm"
 	printf "Options:\n"
+	printf "$optfmt" "-f" "View read/write activity by file. Implies \`-w'."
 	printf "$optfmt" "-G file" "Group map file. Default \`$GROUP_MAP'."
-	printf "$optfmt" "-g" "View groups instead of users."
+	printf "$optfmt" "-g" "View read/write activity by group."
 	printf "$optfmt" "-h" "Print usage statement and exit."
 	printf "$optfmt" "-i sec" \
 		"Set interval seconds. Default $DEFAULT_INTERVAL."
 	printf "$optfmt" "" "Accepts decimal point on seconds."
 	printf "$optfmt" "-P file" "User map file. Default \`$PASSWD_MAP'."
+	printf "$optfmt" "-r" "Raw view. Do not format output of bpftrace."
 	printf "$optfmt" "-v" "Print version and exit."
+	printf "$optfmt" "-w" "Wide view. Maximize width of first column."
 
 	exit $FAILURE
 }
@@ -84,14 +90,17 @@ usage()
 #
 # Parse command-line options
 #
-while getopts ghi:nv flag; do
+while getopts fghi:nrvw flag; do
 	case "$flag" in
-	g) GROUP_VIEW=1 ;;
+	f) FILE_VIEW=1 WIDE_VIEW=1 GROUP_VIEW= ;;
+	g) GROUP_VIEW=1 FILE_VIEW= ;;
 	i) INTERVAL="$OPTARG" ;;
 	n) NO_NAMES=1 ;;
+	r) RAW_VIEW=1 ;;
 	v) VERSION="${VERSION#*: }"
 		echo "${VERSION% $}"
 		exit $SUCCESS ;;
+	w) WIDE_VIEW=1 ;;
 	*) usage # NOTREACHED
 	esac
 done
@@ -135,25 +144,46 @@ if [ "$size" ]; then
 fi
 
 #
-# Trace nfsd I/O by user
+# Trace nfsd I/O
 #
 bpftrace /dev/stdin <<EOF | awk \
 	-v cols=$cols \
+	-v file_view=${FILE_VIEW:-0} \
 	-v group_map="$GROUP_MAP" \
 	-v group_view=${GROUP_VIEW:-0} \
 	-v interval=$INTERVAL_SECONDS \
 	-v no_names=${NO_NAMES:-0} \
 	-v passwd_map="$PASSWD_MAP" \
+	-v raw_view=${RAW_VIEW:-0} \
 	-v rows=$rows \
+	-v wide_view=${WIDE_VIEW:-0} \
 	'####################################### BEGIN
 
 	BEGIN {
-		fmt = "%-20s %12s %*s|%-*s %-12s\n"
-		bar_size = (cols - 20 - 4 - 24) / 2 - 1
+		if (wide_view) {
+			vsz = cols - 36 - 5 - 21 # Maximize view column
+		} else {
+			vsz = 15 # Maximize bar column
+		}
 
-		clear()
-		print_header()
-		print "Waiting for bpftrace to initialize ..."
+		fmt = "%-"vsz"s %12s %12s %*s|%-*s %-12s\n"
+		bar_size = (cols - vsz - 5 - 36) / 2 - 1
+
+		# Column headers
+		if (file_view) {
+			view = "FILE"
+		} else if (group_view) {
+			view = "GROUP"
+		} else {
+			view = "USER"
+		}
+
+		if (!raw_view) {
+			clear()
+			print_header()
+			print "Waiting for bpftrace to initialize ..."
+			if (!no_names) load_files()
+		}
 
 		# Declare arrays
 		delete creds
@@ -161,23 +191,6 @@ bpftrace /dev/stdin <<EOF | awk \
 		delete write
 		delete read_write
 		delete read_write_sorted
-
-		# Load user/group maps
-		if (!no_names) {
-			delete uid2name
-			while (getline < passwd_map > 0) {
-				n = split($0, fields, /:/)
-				uid2name[fields[3]] = fields[1]
-			}
-			close(passwd_map)
-
-			delete gid2name
-			while (getline < group_map > 0) {
-				n = split($0, fields, /:/)
-				gid2name[fields[3]] = fields[1]
-			}
-			close(group_map)
-		}
 	}
 
 	######################################## FUNCTIONS
@@ -187,18 +200,42 @@ bpftrace /dev/stdin <<EOF | awk \
 	function print_header()
 	{
 		printf "%s\n\n",strftime("%c",systime())
-		printf fmt, group_view ? "GROUP" : "USER",
-			"WRITE", bar_size, "", bar_size, "", "READ"
+		printf fmt, view, "TOTAL",
+			"WRITE(IN)", bar_size, "", bar_size, "", "READ(OUT)"
+	}
+
+	function load_files()
+	{
+		delete uid2name
+		while (getline < passwd_map > 0) {
+			n = split($0, fields, /:/)
+			uid2name[fields[3]] = fields[1]
+		}
+		close(passwd_map)
+
+		delete gid2name
+		while (getline < group_map > 0) {
+			n = split($0, fields, /:/)
+			gid2name[fields[3]] = fields[1]
+		}
+		close(group_map)
 	}
 
 	function parse_map()
 	{
 		if (!match($0, /^@[^\[]*\[/)) return 0
 		map = substr($0, RSTART + 1, RLENGTH - 2)
-		match($0, /\[[0-9]+,/)
-		uid = int(substr($0, RSTART + 1, RLENGTH - 2))
-		match($0, / [0-9]+\]/)
-		gid = int(substr($0, RSTART + 1, RLENGTH - 2))
+		if (file_view) {
+			match($0, /\[.*\]:/)
+			path = substr($0, RSTART + 1, RLENGTH - 3)
+			gsub(/, /, "/", path)
+			gsub("//+", "/", path)
+		} else {
+			match($0, /\[[0-9]+,/)
+			uid = int(substr($0, RSTART + 1, RLENGTH - 2))
+			match($0, / [0-9]+\]/)
+			gid = int(substr($0, RSTART + 1, RLENGTH - 2))
+		}
 		value = $NF
 		return 1
 	}
@@ -232,6 +269,11 @@ bpftrace /dev/stdin <<EOF | awk \
 
 	######################################## MAIN
 
+	raw_view {
+		print
+		next
+	}
+
 	/^===$/ {
 		clear()
 		print_header()
@@ -244,7 +286,14 @@ bpftrace /dev/stdin <<EOF | awk \
 	}
 
 	parse_map() {
-		creds[cred = group_view ? gid : uid]
+		if (file_view) {
+			cred = path
+		} else if (group_view) {
+			cred = gid
+		} else {
+			cred = uid
+		}
+		creds[cred]
 		if (map == "nfsd_read") {
 			read[cred] += value
 			read_write[cred] += value
@@ -271,17 +320,17 @@ bpftrace /dev/stdin <<EOF | awk \
 		read_bar = ""
 		write_rate = write_total / interval
 		write_bar = ""
-		printf fmt, "total",
+		printf fmt, "total", humanize(write_rate + read_rate),
 			humanize(write_rate), bar_size, write_bar,
 			bar_size, read_bar, humanize(read_rate)
 
 		# Sort values, extract cred, and print
-		table_rows = rows - 4
+		table_rows = rows - 5
 		r = 1
 		n = _asort(read_write, read_write_sorted)
 		for (i = n; i >= 1 && r++ <= table_rows; i--) {
 			cred = read_write_sorted[i]
-			sub(/.* /, "", cred)
+			sub(/^ *[^ ]+ +/, "", cred)
 			write_rate = write[cred] / interval
 
 			if (write_total > 0)
@@ -303,15 +352,17 @@ bpftrace /dev/stdin <<EOF | awk \
 				if (group_view) {
 					if (cred in gid2name)
 						cred = gid2name[cred]
-				} else {
+				} else if (!file_view) {
 					if (cred in uid2name)
 						cred = uid2name[cred]
 				}
-				if (length(cred) > 20)
-					cred = substr(cred, 1, 20)
+				if (length(cred) > vsz) {
+					cred = "..." substr(cred,
+						length(cred) - vsz + 4)
+				}
 			}
 
-			printf fmt, cred,
+			printf fmt, cred, humanize(write_rate + read_rate),
 				humanize(write_rate), bar_size, write_bar,
 				bar_size, read_bar, humanize(read_rate)
 		}
@@ -349,7 +400,13 @@ kprobe:nfsd_read
 	@nfsd_read_rqstp[tid] = (struct svc_rqst *)arg0;
 	@nfsd_read_countp[tid] = arg5;
 }
-
+${FILE_VIEW:+"
+kprobe:nfsd_init_raparms
+/@nfsd_read_rqstp[tid] != 0/
+{
+	@nfsd_read_file[tid] = (struct file *)arg0;
+}
+"}
 kretprobe:nfsd_read
 /@nfsd_read_rqstp[tid] != 0 && @nfsd_read_countp[tid] != 0/
 {
@@ -362,7 +419,21 @@ kretprobe:nfsd_read
 	delete(@nfsd_read_countp[tid]);
 	delete(@nfsd_read_rqstp[tid]);
 
+$( if [ "$FILE_VIEW" ]; then cat <<VIEW
+	\$file = @nfsd_read_file[tid];
+	\$de = \$file->f_dentry;
+	\$n1 = \$de->d_name.name;
+	\$de = \$de->d_parent;
+	\$n2 = \$de->d_name.name;
+
+	delete(@nfsd_read_file[tid]);
+
+	@nfsd_read[str(\$n2), str(\$n1)] = sum(\$bytes);
+VIEW
+else cat <<VIEW
 	@nfsd_read[\$uid, \$gid] = sum(\$bytes);
+VIEW
+fi )
 }
 
 ////////////////////////////////////////////////// WRITE PROBES
@@ -372,7 +443,13 @@ kprobe:nfsd_write
 	@nfsd_write_rqstp[tid] = (struct svc_rqst *)arg0;
 	@nfsd_write_countp[tid] = arg5;
 }
-
+${FILE_VIEW:+"
+kprobe:nfsd_vfs_write
+/@nfsd_write_rqstp[tid] != 0/
+{
+	@nfsd_write_file[tid] = (struct file *)arg2;
+}
+"}
 kretprobe:nfsd_write
 /@nfsd_write_rqstp[tid] != 0 && @nfsd_write_countp[tid] != 0/
 {
@@ -385,7 +462,21 @@ kretprobe:nfsd_write
 	delete(@nfsd_write_countp[tid]);
 	delete(@nfsd_write_rqstp[tid]);
 
+$( if [ "$FILE_VIEW" ]; then cat <<VIEW
+	\$file = @nfsd_write_file[tid];
+	\$de = \$file->f_dentry;
+	\$n1 = \$de->d_name.name;
+	\$de = \$de->d_parent;
+	\$n2 = \$de->d_name.name;
+
+	delete(@nfsd_write_file[tid]);
+
+	@nfsd_write[str(\$n2), str(\$n1)] = sum(\$bytes);
+VIEW
+else cat <<VIEW
 	@nfsd_write[\$uid, \$gid] = sum(\$bytes);
+VIEW
+fi )
 }
 
 ////////////////////////////////////////////////// INTERVAL PROBE
@@ -411,12 +502,14 @@ END
 {
 	// Clear read
 	clear(@nfsd_read);
-	clear(@nfsd_read_countp);
+	clear(@nfsd_read_countp);${FILE_VIEW:+
+	clear(@nfsd_read_file);}
 	clear(@nfsd_read_rqstp);
 
 	// Clear write
 	clear(@nfsd_write);
-	clear(@nfsd_write_countp);
+	clear(@nfsd_write_countp);${FILE_VIEW:+
+	clear(@nfsd_write_file);}
 	clear(@nfsd_write_rqstp);
 }
 
