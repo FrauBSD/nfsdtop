@@ -1,0 +1,79 @@
+# -*- tab-width:  4 -*- ;; Emacs
+# vi: set noexpandtab   :: Vi/ViM
+# vi: set filetype=spec ::
+############################################################ HEADER
+
+Name: nfsdtop
+Group: Applications/FrauBSD
+# For a list of groups, see pkgcenter/redhat/Mk/GROUPS
+
+Summary: nfsdtop
+License: BSD
+Version: 0.3.1
+Release: 1
+Buildarch: noarch
+
+URL: https://www.fraubsd.org/nfsdtop
+Packager: Devin Teske <dteske@freebsd.org>
+Vendor: The FrauBSD Project https://www.fraubsd.org/
+
+BuildRoot: %{_tmppath}/src
+
+Requires: /bin/awk
+Requires: /bin/sh
+Requires: bpftrace
+
+############################################################ DESCRIPTION
+
+%Description
+Display top I/O by user/group on NFS servers using bpftrace
+
+WWW: https://www.fraubsd.org/nfsdtop
+
+############################################################ MACROS
+
+#
+# Define how we should install the files into the temporary
+# install-root from which the RPM will be compiled.
+#
+%define TAR          %{__tar}
+%define TARFROMFLAGS c --exclude CVS -f - -C
+%define TARFILES     .
+%define TARTOFLAGS   xvf - -C
+
+#
+# Short-hand
+#
+# NOTE: $RPM_BUILD_ROOT has a trailing-slash
+#
+%define TMPROOT $RPM_BUILD_ROOT
+
+############################################################ INSTALL STANZA
+
+%install
+%{__mkdir_p} %{TMPROOT}
+%{TAR} %{TARFROMFLAGS} %{_srcdir} %{TARFILES} | %{TAR} %{TARTOFLAGS} %{TMPROOT}
+
+############################################################ FILES STANZA
+
+%files
+%defattr(-,root,root)
+/usr/bin/nfsdtop
+
+############################################################ FOOTER
+
+%pre
+
+
+%post
+
+
+%preun
+
+
+%postun
+
+
+%changelog
+* Wed Mar  4 2020 Devin Teske <dteske@fraubsd.org> 0.3.1-1
+- Package created.

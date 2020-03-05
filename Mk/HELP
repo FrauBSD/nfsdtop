@@ -1,0 +1,19 @@
+Generic Targets:
+   noargs|all|help|targets Print this text and exit
+   usage                   Print more detailed information on each target
+Global Building Targets:
+   all_all                 Build all packages (works best on Linux)
+   depend_all              Perform `make depend' for all packages
+   forcedepend_all         Perform `make forcedepend' for all packages
+Global Maintenance Targets:
+   clean_all               Perform `make clean' for all packags
+   distclean_all           Perform `make distclean' for all packages
+   pull_all                Perform `make pull' for all packages
+   commit_all              Perform `make commit' for all packages
+Git Maintenance Targets:
+   pull                    An alias to `git pull'
+   tag_all                 Perform `make tag' for all packages
+   forcetag_all            Perform `make forcetag' for all packages
+Git Addition Targets:
+   import                  Import current working directory to git
+   commit                  An alias to `git commit'

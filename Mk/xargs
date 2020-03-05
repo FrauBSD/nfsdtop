@@ -1,0 +1,38 @@
+#!/bin/sh
+# -*- tab-width: 4 -*- ;; Emacs
+# vi: set noexpandtab  :: Vi/ViM
+############################################################ IDENT(1)
+#
+# $Title: Script for using xargs(1) from Makefiles $
+# $Copyright: 1999-2017 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/Mk/xargs 2020-03-04 16:01:40 -0800 freebsdfrau $
+#
+############################################################ INFORMATION
+#
+# Usage: xargs ...
+#
+############################################################ GLOBALS
+
+#
+# Utility pathnames
+#
+: ${UNAME:=uname}
+: ${XARGS:=xargs}
+
+#
+# OS Glue
+#
+case "${UNAME_s:=$( uname -s )}" in
+Linux|CYGWIN*)
+        GNU_XARGS=1 ;;
+*)
+        GNU_XARGS= ;;
+esac
+
+############################################################ MAIN
+
+$XARGS ${GNU_XARGS:+-r} "$@"
+
+################################################################################
+# END
+################################################################################

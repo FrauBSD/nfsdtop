@@ -1,0 +1,52 @@
+#!/bin/sh
+# -*- tab-width: 4 -*- ;; Emacs
+# vi: set noexpandtab  :: Vi/ViM
+############################################################ IDENT(1)
+#
+# $Title: Script for generating errors from Makefiles $
+# $Copyright: 1999-2017 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/Mk/die 2020-03-04 16:01:40 -0800 freebsdfrau $
+#
+############################################################ INFORMATION
+#
+# Usage: die [FORMAT [ARGUMENT ...]]
+#
+############################################################ GLOBALS
+
+#
+# Global exit status
+#
+SUCCESS=0
+FAILURE=1
+
+############################################################ FUNCTIONS
+
+# err FORMAT [ARGUMENT ...]
+#
+# Print a message to stderr.
+#
+err()
+{
+	local fmt="$1"
+	shift 1 # fmt
+	[ "$fmt" ] || return $SUCCESS
+	printf "$fmt\n" "$@" >&2
+}
+
+# die [FORMAT [ARGUMENT ...]]
+#
+# Optionally print a message to stderr before exiting with failure status.
+#
+die()
+{
+	err "$@"
+	exit $FAILURE
+}
+
+############################################################ MAIN
+
+die "$@"
+
+################################################################################
+# END
+################################################################################

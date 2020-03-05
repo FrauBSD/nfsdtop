@@ -1,0 +1,73 @@
+Generic Targets
+
+	all (or no arguments)
+	help
+	targets
+	    Print summary information about available targets.
+
+	usage
+	    Print this text and exit.
+
+Global Building Targets:
+
+	all_redhat
+	    Performs `make all' in all package directories, attempting to
+	    build each/every package.
+
+	    NOTE: Some packages may fail to build on certain operating systems.
+	          For example, it is currently not possible to build a Linux
+	          RPM on FreeBSD.
+
+	depend_redhat
+	    Performs `make depend' in all package directories, copying static
+	    file dependencies (if configured) from the `depend' tree into the
+	    given package sub-directory.
+
+	forcedepend_redhat
+	    Performs `make forcedepend' in all package directories, forcing the
+	    copy of file dependencies (if configured) from the `depend' tree
+	    overwriting local copies in the given package sub-directory.
+
+Global Maintenance Targets:
+
+	clean_redhat
+	    Performs `make clean' in all package directories.
+
+	distclean_redhat
+	    Performs `make distclean' in all package directories.
+
+	    WARNING: This is intended to remove any/all compiled packages,
+	             returning the repository to an SCM-clean state.
+
+	pull_redhat
+	    Performs `make pull' in all package directories.
+
+	commit_redhat
+	    Performs `make commit' in all package directories.
+
+Git Maintenance Targets:
+
+	pull
+	    An alias for `git pull'.
+
+	tag_redhat
+	    Performs `make tag' in all package directories, tagging files for a
+	    given package to the current package version.
+
+	forcetag_redhat
+	    Performs `make forcetag' in all package directories, tagging files
+	    for a given package to the current package version even if already
+	    tagged at a lower revision with the same tag.
+
+	taglist_redhat
+	    Performs `make taglist' in all package directories, listing tags
+	    for each package.
+
+Git Addition Targets:
+
+	commit
+	    An alias to `git commit'.
+
+	import
+	    Import current working directory to git.
+

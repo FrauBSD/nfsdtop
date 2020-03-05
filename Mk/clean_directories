@@ -1,0 +1,53 @@
+#!/bin/sh
+# -*- tab-width: 4 -*- ;; Emacs
+# vi: set noexpandtab  :: Vi/ViM
+############################################################ IDENT(1)
+#
+# $Title: Script for removing a list of directories via Makefiles $
+# $Copyright: 1999-2017 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/Mk/clean_directories 2020-03-04 16:01:40 -0800 freebsdfrau $
+#
+############################################################ INFORMATION
+#
+# Usage: clean_directories PATH ...
+#
+############################################################ GLOBALS
+
+#
+# Global exit status
+#
+SUCCESS=0
+FAILURE=1
+
+#
+# Utility pathnames
+#
+: ${RMDIR:=rmdir}
+: ${RM:=rm}
+
+############################################################ FUNCTIONS
+
+eval2()
+{
+	echo "$*"
+	eval "$@"
+}
+
+############################################################ MAIN
+
+#
+# Remove directory path(s)
+#
+while [ $# -ge 1 ]; do
+	[ -d "$1" ] && eval2 $RMDIR "$1"
+	shift 1
+done
+
+#
+# Remove sentinel
+#
+eval2 $RM -f .dirs_created
+
+################################################################################
+# END
+################################################################################

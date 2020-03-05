@@ -1,0 +1,49 @@
+#!/bin/sh
+# -*- tab-width: 4 -*- ;; Emacs
+# vi: set noexpandtab  :: Vi/ViM
+############################################################ IDENT(1)
+#
+# $Title: Script for reading directives from pkgcenter.conf files $
+# $Copyright: 1999-2017 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/Mk/pkgcenter_readconf 2020-03-04 16:01:40 -0800 freebsdfrau $
+#
+############################################################ INFORMATION
+#
+# Usage: pkgcenter_readconf PKGCENTER_CONF DIRECTIVE
+#
+############################################################ GLOBALS
+
+#
+# Global exit status
+#
+SUCCESS=0
+FAILURE=1
+
+#
+# Utility pathnames
+#
+: ${AWK:=awk}
+
+#
+# Command-line arguments
+#
+PKGCENTER_CONF="$1"
+DIRECTIVE="$2"
+
+############################################################ MAIN
+
+#
+# Validate command-line arguments
+#
+[ -f "$PKGCENTER_CONF" ] || exit $SUCCESS
+
+#
+# Read configuration file
+#
+echo "Reading $DIRECTIVE from $PKGCENTER_CONF..." >&2
+. "$PKGCENTER_CONF" > /dev/null &&
+	eval echo '"${'"$DIRECTIVE"'}"' | $AWK '!/^[[:space:]]*(#|$)/'
+
+################################################################################
+# END
+################################################################################

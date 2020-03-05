@@ -1,0 +1,92 @@
+#!/bin/sh
+# -*- tab-width: 4 -*- ;; Emacs
+# vi: set noexpandtab  :: Vi/ViM
+############################################################ IDENT(1)
+#
+# $Title: Script for filling %files in SPECFILE with list of stage contents $
+# $Copyright: 1999-2019 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/Mk/rpmstagefiles 2020-03-04 16:01:40 -0800 freebsdfrau $
+#
+############################################################ INFORMATION
+#
+# Usage: rpmstagefiles
+#
+############################################################ GLOBALS
+
+pgm="${0##*/}" # Program basename
+
+#
+# Global exit status
+#
+SUCCESS=0
+FAILURE=1
+
+#
+# Utility pathnames
+#
+: ${FIND:=find}
+: ${SORT:=sort}
+: ${MV:=mv}
+: ${AWK:=awk}
+: ${RM:=rm}
+
+############################################################ FUNCTIONS
+
+die()
+{
+	local fmt="$1"
+	if [ "$fmt" ]; then
+		shift 1 # fmt
+		printf "$pgm: $fmt\n" "$*"
+	fi
+	exit $FAILURE
+}
+
+############################################################ MAIN
+
+#
+# Check environment variables
+#
+[ "$SPECFILE" ] || die "SPECFILE unset or NULL (exiting)"
+[ "$STAGEDIR" ] || die "STAGEDIR unset or NULL (exiting)"
+
+#
+# Generate the new contents from the old
+#
+[ -e "$SPECFILE.orig" ] && die "%s.orig exists (exiting)" "$SPECFILE"
+$MV -n "$SPECFILE" "$SPECFILE.orig" ||
+	die "Unable to move \`%s' to \`.orig'" "$SPECFILE"
+$FIND "$STAGEDIR" -not -type d | $SORT |
+	$AWK -v stagedir="$STAGEDIR" -v specfile="$SPECFILE.orig" '
+		BEGIN {
+			trim = length(stagedir) + 1
+			while (getline) files = files "\n" substr($0, trim)
+		}
+		END {
+			while (getline < specfile) {
+				buf = buf "\n" $0
+				if (/^%files$/) {
+					while (getline < specfile && /^%/) {
+						buf = buf "\n" $0
+					}
+					while ($0 ~ "^/") getline < specfile
+					buf = buf files "\n"
+					if (!/^[[:space:]]*$/)
+						buf = buf $0
+				}
+			}
+			close(specfile)
+			print substr(buf,2)
+		}
+	' > "$SPECFILE" || die
+
+#
+# Clean up
+#
+$RM -f "$SPECFILE.orig"
+
+exit $SUCCESS
+
+################################################################################
+# END
+################################################################################

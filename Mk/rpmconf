@@ -1,0 +1,217 @@
+#!/bin/sh
+# -*- tab-width: 4 -*- ;; Emacs
+# vi: set noexpandtab  :: Vi/ViM
+############################################################ IDENT(1)
+#
+# $Title: Script to update pkgcenter.conf file $
+# $Copyright: 2017-2019 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/Mk/rpmconf 2020-03-04 16:01:40 -0800 freebsdfrau $
+#
+############################################################ INFORMATION
+#
+# Usage: rpmconf SPECFILE
+#
+############################################################ GLOBALS
+
+pgm="${0##*/}" # Program basename
+
+#
+# Global exit status
+#
+SUCCESS=0
+FAILURE=1
+
+#
+# OS Glue
+#
+: ${UNAME_s=$( uname -s )}
+export UNAME_s # for awk(1) ENVIRON[] visibility
+
+#
+# Utility pathnames
+#
+: ${AWK:=awk}
+: ${PERL:=perl}
+: ${READLINK:=readlink}
+export READLINK PERL # for awk(1) ENVIRON[] visibility
+
+#
+# Miscellaneous
+#
+SRCDIR=
+
+############################################################ FUNCTIONS
+
+die()
+{
+	exec >&2
+	[ $# -gt 0 ] && echo "$pgm: $*"
+	exit $FAILURE
+}
+
+usage()
+{
+	exec >&2
+	[ $# -gt 0 ] && echo "$pgm: $*"
+	echo "Usage: $pgm [SPECFILE]"
+	exit $FAILURE
+}
+
+if ! type realpath > /dev/null 2>&1; then
+case "$UNAME_s" in
+Darwin)
+realpath()
+{
+	$PERL -le 'use Cwd; print Cwd::abs_path(@ARGV)' -- "$@"
+}
+;;
+*)
+realpath()
+{
+	$READLINK -f "$@"
+}
+esac
+fi
+
+############################################################ MAIN
+
+set -e # Make all errors fatal
+
+#
+# Process command-line arguments
+#
+if [ $# -eq 0 ]; then
+	: ${SPECFILE:=SPECFILE}
+	[ -e "$SPECFILE" ] || usage # NOTREACHED
+else
+	SPECFILE="$1"
+	[ "$SPECFILE" ] || usage # NOTREACHED
+fi
+[ -e "$SPECFILE" ] || die "$SPECFILE: No such file or directory"
+if [ ! "$PKGCENTER_CONF" ]; then
+	PKGCENTER_CONF=$( realpath "$SPECFILE" )
+	PKGCENTER_CONF="${PKGCENTER_CONF%/*}/pkgcenter.conf"
+	[ -e "$PKGCENTER_CONF" ] || die "Unable to find \`pkgcenter.conf'"
+fi
+[ -e "$PKGCENTER_CONF" ] || die "$PKGCENTER_CONF: No such file or directory"
+
+#
+# Source pkgcenter.conf to get additional required settings
+#
+. "$PKGCENTER_CONF"
+[ "$SRCDIR" ] || die "$PKGCENTER_CONF: SRCDIR: Undefined value"
+[ -e "$SRCDIR" ] || die "$SRCDIR: No such file or directory"
+[ -d "$SRCDIR" ] || die "$SRCDIR: Not a directory"
+
+#
+# Process `%files' section of SPECFILE
+#
+$AWK '$1 == "%files", /^[[:space:]]*$/ { if ($0 ~ "^/") print }' "$SPECFILE" |
+	$AWK -v src="$SRCDIR" '
+	################################################## BEGIN
+	BEGIN {
+		pkgcenter = ENVIRON["PKGCENTER"]
+		prefix    = "$SRCDIR"
+		stagedir  = "$STAGEDIR"
+		stagelen  = length(stagedir)
+		readlink  = ENVIRON["READLINK"] " "
+		template  = pkgcenter "/redhat/Mk/template.conf"
+
+		if (ENVIRON["UNAME_s"] == "Darwin")
+			readlink = sprintf("%s -le '\''%s'\'' -- ",
+				ENVIRON["PERL"], "print readlink $ARGV[0]")
+	}
+	################################################## FUNCTIONS
+	function argsafe(str)
+	{
+		gsub(/'\''/, "&\\\\&&", str)
+		return sprintf("'\''%s'\''", str)
+	}
+	function test(flag, testpath)
+	{
+		retval = 0
+		cmd = sprintf("[ %s %s ] && echo 1", flag, argsafe(testpath))
+		cmd | getline retval
+		close(cmd)
+		return retval
+	}
+	function _asorti(src, dest)
+	{
+		k = nitems = 0
+		for (i in src) dest[++nitems] = i
+		for (i = 1; i <= nitems; k = i++) {
+			idx = dest[i]
+			while ((k > 0) && (dest[k] > idx)) {
+				dest[k+1] = dest[k]; k--
+			}
+			dest[k+1] = idx
+		}
+		return nitems
+	}
+	################################################## MAIN
+	path = $0 {
+		if (test("-L", src path)) {
+			SYMLINKS[path] = 1
+			parentdir = path
+			sub("/[^/]*$", "", parentdir)
+			DIRS[parentdir] = 1
+			while (sub("/[^/]+$", "", parentdir))
+				if (parentdir ~ "/") DIRS[parentdir] = 1
+		} else if (test("-d", src path)) {
+			sub("/*$", "", path)
+			DIRS[path] = 1
+			while (sub("/[^/]+$", "", path))
+				if (path ~ "/") DIRS[path] = 1
+		} else {
+			STAGE[path] = 1
+		}
+	}
+	################################################## END
+	END {
+		n = _asorti(DIRS, sorted_dirs)
+		dir_list = "# Directory"
+		for (i = n; i >= 1; i--)
+			dir_list = dir_list "\n\t" stagedir sorted_dirs[i]
+
+		n = _asorti(SYMLINKS, sorted_symlinks)
+		L = 17 - stagelen
+		for (i = 1; i <= n; i++)
+			L = (len = length(sorted_symlinks[i])) > L ? len : L
+		symlink_list = sprintf("%-*s %s", L + stagelen,
+			"# Symbolic-link", "Target")
+		for (i = 1; i <= n; i++) {
+			symlink = sorted_symlinks[i]
+			cmd = readlink argsafe(src symlink)
+			cmd | getline target
+			close(cmd)
+			symlink_list = symlink_list sprintf("\n\t%s%-*s %s",
+				stagedir, L, symlink, target)
+		}
+
+		n = _asorti(STAGE, sorted_stage)
+		if (substr(src, 1, len = length(pkgcenter)) == pkgcenter)
+			src = "$PKGCENTER" substr(src, len + 1)
+		stage_list = "# Source   Destination"
+		for (i = 1; i <= n; i++) {
+			path = sorted_stage[i]
+			stage_list = stage_list sprintf("\n\t%s\n\t%11s%s",
+				prefix path, "", stagedir path)
+		}
+
+		while (getline < template) {
+			gsub(/@DIRS@/, dir_list)
+			gsub(/@SYMLINKS@/, symlink_list)
+			gsub(/@SRCDIR@/, src)
+			gsub(/@STAGE@/, stage_list)
+			print
+		}
+	}' > "$PKGCENTER_CONF.new"
+
+#
+# Move new file into place
+#
+mv -f "$PKGCENTER_CONF.new" "$PKGCENTER_CONF"
+
+################################################################################
+# END
+################################################################################

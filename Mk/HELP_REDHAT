@@ -1,0 +1,20 @@
+Generic Targets:
+   noargs|all|help|targets Print this text and exit
+   usage                   Print more detailed information on each target
+Global Building Targets:
+   all_redhat              Build all packages (works best on Linux)
+   depend_redhat           Perform `make depend' for all packages
+   forcedepend_redhat      Perform `make forcedepend' for all packages
+Global Maintenance Targets:
+   clean_redhat            Perform `make clean' for all packags
+   distclean_redhat        Perform `make distclean' for all packages
+   pull_redhat             Perform `make pull' for all packages
+   commit_redhat           Perform `make commit' for all packages
+Git Maintenance Targets:
+   pull                    An alias to `git pull'
+   tag_redhat              Perform `make tag' for all packages
+   forcetag_redhat         Perform `make forcetag' for all packages
+   taglist_redhat          Perform `make taglist' for all packages
+Git Addition Targets:
+   import                  Import current working directory to git
+   commit                  An alias to `git commit'

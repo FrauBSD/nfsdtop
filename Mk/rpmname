@@ -1,0 +1,51 @@
+#!/bin/sh
+# -*- tab-width: 4 -*- ;; Emacs
+# vi: set noexpandtab  :: Vi/ViM
+############################################################ IDENT(1)
+#
+# $Title: Script for getting the package name from an RPM SPEC-file $
+# $Copyright: 1999-2017 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/Mk/rpmname 2020-03-04 16:01:40 -0800 freebsdfrau $
+#
+############################################################ INFORMATION
+#
+# Usage: rpmgroup SPECFILE
+#
+############################################################ GLOBALS
+
+#
+# Global exit status
+#
+SUCCESS=0
+FAILURE=1
+
+#
+# Utility pathnames
+#
+: ${AWK:=awk}
+
+############################################################ MAIN
+
+#
+# Validate number of arguments
+#
+[ $# -gt 0 ] || exit $SUCCESS
+
+#
+# Get the RPM name from a SPECFILE
+#
+sp="[[:space:]]*"
+$AWK -v name_regex="^$sp[Nn][Aa][Mm][Ee]:$sp"             \
+     -v vers_regex="^$sp[Vv][Ee][Rr][Ss][Ii][Oo][Nn]:$sp" \
+     -v vrel_regex="^$sp[Rr][Ee][Ll][Ee][Aa][Ss][Ee]:$sp" \
+'
+		!name && sub(name_regex, "") { name = $0 }
+		!vers && sub(vers_regex, "") { vers = $0 }
+		!vrel && sub(vrel_regex, "") { vrel = $0 }
+		name && vers && vrel { exit found++ }
+		END { print name "-" vers "-" vrel; exit !found }
+' "$1"
+
+################################################################################
+# END
+################################################################################

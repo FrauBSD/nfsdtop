@@ -1,0 +1,113 @@
+#!/bin/sh
+# -*- tab-width: 4 -*- ;; Emacs
+# vi: set noexpandtab  :: Vi/ViM
+############################################################ IDENT(1)
+#
+# $Title: Script for tagging git repositories from Makefiles $
+# $Copyright: 1999-2017 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/Mk/git_tag 2020-03-04 16:01:40 -0800 freebsdfrau $
+#
+############################################################ INFORMATION
+#
+# Usage: git_tag [OPTIONS] TAG
+# OPTIONS:
+# 	-f   Force. Allow tagging of files already tagged at a lower revision
+# 	     with the same tag.
+#
+############################################################ GLOBALS
+
+pgm="${0##*/}" # Program basename
+
+#
+# Global exit status
+#
+SUCCESS=0
+FAILURE=1
+
+#
+# OS Glue
+#
+: ${UNAME_s:=$( uname -s )}
+
+#
+# Utility pathnames
+#
+: ${CP:=cp}
+: ${GIT:=git}
+
+#
+# Command-line options
+#
+FORCE=		# -f
+LIST=		# -l
+
+############################################################ FUNCTIONS
+
+eval2()
+{
+	echo "$*"
+	eval "$@"
+}
+
+############################################################ FUNCTIONS
+
+if ! type realpath > /dev/null 2>&1; then
+case "$UNAME_s" in
+Darwin)
+realpath()
+{
+	perl -le 'use Cwd; print Cwd::abs_path(@ARGV)' -- "$@"
+}
+;;
+*)
+realpath()
+{
+	readlink -f "$@"
+}
+esac
+fi
+
+############################################################ MAIN
+
+#
+# Process command-line arguments
+#
+while getopts fl flag; do
+	case "$flag" in
+	f) FORCE=1 ;;
+	l) LIST=1 ;;
+	esac
+done
+shift $(( $OPTIND - 1 ))
+
+#
+# Validate number of arguments
+#
+[ $# -lt 1 ] && exit $SUCCESS
+[ "$1" ] || exit $SUCCESS
+
+#
+# Process `-l' flag
+#
+if [ "$LIST" ]; then
+	eval2 $GIT tag -l "$@"
+	exit
+fi
+
+#
+# Build commit message
+#
+path=$( realpath "$0" )
+PKGCENTER="${path%"/Mk/$pgm"}"
+path="${PWD#"${PKGCENTER%/*}/"}"
+commitmsg="$pgm${FORCE:+ -f} in $path" 
+commitmsg=$( echo "$commitmsg" | awk 'gsub(/'\''/,"&\\\\&&")||1' )
+
+#
+# Tag everything
+#
+eval2 $GIT tag -a ${FORCE:+-f} -m "'$commitmsg'" "$@"
+
+################################################################################
+# END
+################################################################################

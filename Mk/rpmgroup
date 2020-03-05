@@ -1,0 +1,48 @@
+#!/bin/sh
+# -*- tab-width: 4 -*- ;; Emacs
+# vi: set noexpandtab  :: Vi/ViM
+############################################################ IDENT(1)
+#
+# $Title: Script for getting the package group from an RPM SPEC-file $
+# $Copyright: 1999-2017 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/Mk/rpmgroup 2020-03-04 16:01:40 -0800 freebsdfrau $
+#
+############################################################ INFORMATION
+#
+# Usage: rpmgroup SPECFILE
+#
+############################################################ GLOBALS
+
+#
+# Global exit status
+#
+SUCCESS=0
+FAILURE=1
+
+#
+# Utility pathnames
+#
+: ${AWK:=awk}
+
+############################################################ MAIN
+
+#
+# Validate number of arguments
+#
+[ $# -gt 0 ] || exit $SUCCESS
+
+#
+# Get the RPM group from a SPECFILE
+#
+$AWK -v regex="^[[:space:]]*[Gg][Rr][Oo][Uu][Pp]:[[:space:]]*" '
+	sub(regex, "") {
+		gsub(/[[:space:]]+/, "_")
+		print
+		exit found++
+	}
+	END { exit !found }
+' "$1"
+
+################################################################################
+# END
+################################################################################

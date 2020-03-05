@@ -1,0 +1,103 @@
+#!/bin/sh
+# -*- tab-width: 4 -*- ;; Emacs
+# vi: set noexpandtab  :: Vi/ViM
+############################################################ IDENT(1)
+#
+# $Title: Script for importing current working directory to git $
+# $Copyright: 1999-2019 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/Mk/git_import 2020-03-04 16:01:40 -0800 freebsdfrau $
+#
+############################################################ INFORMATION
+#
+# Usage: git_import [-a]
+#
+############################################################ GLOBALS
+
+#
+# Global exit status
+#
+SUCCESS=0
+FAILURE=1
+
+#
+# Command-line options
+#
+AUTO=		# -a
+
+#
+# Utility pathnames
+#
+: ${GIT:=git}
+
+#
+# Miscellaneous
+#
+MESSAGE=
+
+############################################################ FUNCTIONS
+
+eval2()
+{
+	echo "$*"
+	eval "$@"
+}
+
+############################################################ MAIN
+
+set -e
+
+#
+# Process command-line options
+#
+while getopts a flag; do
+	case "$flag" in
+	a) AUTO=1 ;;
+	*) echo "Usage: ${0##*/} [-a]" >&2
+	   exit $FAILURE
+	esac
+done
+shift $(( $OPTIND - 1 ))
+
+#
+# Clean before import to prevent importing +MANIFEST et al.
+#
+make clean
+
+#
+# Automation
+#
+if [ "$AUTO" ]; then
+	NAME=$( git config user.name )
+	MESSAGE="Autoimport by $NAME"
+fi
+
+#
+# Import src directory without verification
+#
+if [ -d "$SRCDIR" ]; then
+	echo $GIT add -v "$SRCDIR"
+	added=$( $GIT add -v "$SRCDIR" )
+	if [ "$added" ]; then
+		[ ! "$MESSAGE" ] || printf "Commit message:\n%s\n\n" "$MESSAGE"
+		eval2 $GIT commit --no-verify ${MESSAGE:+-m \"\$MESSAGE\"}
+	fi
+fi
+
+#
+# Clean everything else to prevent importing compiled package
+#
+make distclean
+
+#
+# Import everything else
+#
+echo $GIT add -v .
+added=$( $GIT add -v . )
+if [ "$added" ]; then
+	[ ! "$MESSAGE" ] || printf "Commit message:\n%s\n\n" "$MESSAGE"
+	eval2 $GIT commit ${MESSAGE:+-m \"\$MESSAGE\"}
+fi
+
+################################################################################
+# END
+################################################################################

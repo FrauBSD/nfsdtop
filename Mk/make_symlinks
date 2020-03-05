@@ -1,0 +1,67 @@
+#!/bin/sh
+# -*- tab-width: 4 -*- ;; Emacs
+# vi: set noexpandtab  :: Vi/ViM
+############################################################ IDENT(1)
+#
+# $Title: Script for creating a list of symbolic links from Makefiles $
+# $Copyright: 1999-2017 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/Mk/make_symlinks 2020-03-04 16:01:40 -0800 freebsdfrau $
+#
+############################################################ INFORMATION
+#
+# Usage: make_symlinks SYMLINK_FILE SYMLINK_TARGET ...
+#
+############################################################ GLOBALS
+
+#
+# Global exit status
+#
+SUCCESS=0
+FAILURE=1
+
+#
+# Utility pathnames
+#
+: ${LN:=ln}
+: ${TOUCH:=touch}
+
+############################################################ FUNCTIONS
+
+eval2()
+{
+	echo "$*"
+	eval "$@"
+}
+
+############################################################ MAIN
+
+#
+# Check sentinel
+#
+[ -e .symlinks_created ] && exit $SUCCESS
+
+#
+# Validate number of arguments
+#
+if [ $# -lt 2 ]; then
+	$TOUCH .symlinks_created
+	exit
+fi
+
+#
+# Create symbolic link(s)
+#
+set -e
+while [ $# -ge 2 ]; do
+	eval2 $LN -sf "$2" "$1"
+	shift 2
+done
+
+#
+# Create sentinel
+#
+$TOUCH .symlinks_created
+
+################################################################################
+# END
+################################################################################

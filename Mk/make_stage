@@ -1,0 +1,87 @@
+#!/bin/sh
+# -*- tab-width: 4 -*- ;; Emacs
+# vi: set noexpandtab  :: Vi/ViM
+############################################################ IDENT(1)
+#
+# $Title: Script for managing staging dependencies from Makefiles $
+# $Copyright: 1999-2017 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/Mk/make_stage 2020-03-04 16:01:40 -0800 freebsdfrau $
+#
+############################################################ INFORMATION
+#
+# Usage: make_stage [OPTIONS] SOURCE_FILE DEST_FILE ...
+# OPTIONS:
+# 	-f   Force. Attempt to copy SOURCE_FILE even if it doesn't exist.
+#
+############################################################ GLOBALS
+
+#
+# Global exit status
+#
+SUCCESS=0
+FAILURE=1
+
+#
+# Utility pathnames
+#
+: ${CP:=cp}
+: ${MKDIR:=mkdir}
+
+#
+# Command-line arguments
+#
+FROM=
+TO=
+
+#
+# Command-line options
+#
+FORCE=
+
+#
+# Miscellaneous
+#
+DESTDIR=
+
+############################################################ FUNCTIONS
+
+eval2()
+{
+	echo "$*"
+	eval "$@"
+}
+
+############################################################ MAIN
+
+#
+# Process command-line options
+#
+while getopts f flag; do
+	case "$flag" in
+	f) FORCE=1 ;;
+	esac
+done
+shift $(( $OPTIND - 1 ))
+
+#
+# Validate number of arguments
+#
+[ $# -ge 2 ] || exit $SUCCESS
+
+#
+# Copy staging dependencies
+#
+set -e
+while [ $# -ge 2 ]; do
+	FROM="$1" TO="$2"
+	shift 2
+	case "$TO" in */*) DESTDIR="${TO%/*}"
+		[ -d "$DESTDIR" ] || eval2 $MKDIR -p "$DESTDIR" ;;
+	esac
+	[ "$FORCE" ] || [ "$FROM" -nt "$TO" -o ! -e "$TO" ] || continue
+	eval2 $CP -f "$FROM" "$TO"
+done
+
+################################################################################
+# END
+################################################################################

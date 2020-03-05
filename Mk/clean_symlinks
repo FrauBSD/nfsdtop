@@ -1,0 +1,54 @@
+#!/bin/sh
+# -*- tab-width: 4 -*- ;; Emacs
+# vi: set noexpandtab  :: Vi/ViM
+############################################################ IDENT(1)
+#
+# $Title: Script for removing a list of symbolic links via Makefiles $
+# $Copyright: 1999-2017 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/Mk/clean_symlinks 2020-03-04 16:01:40 -0800 freebsdfrau $
+#
+############################################################ INFORMATION
+#
+# Usage: clean_symlinks SYMLINK_FILE SYMLINK_TARGET ...
+#
+# NB: Only the SYMLINK_FILE is deleted
+#
+############################################################ GLOBALS
+
+#
+# Global exit status
+#
+SUCCESS=0
+FAILURE=1
+
+#
+# Utility pathnames
+#
+: ${RM:=rm}
+
+############################################################ FUNCTIONS
+
+eval2()
+{
+	echo "$*"
+	eval "$@"
+}
+
+############################################################ MAIN
+
+#
+# Remove symlink_file path(s)
+#
+while [ $# -ge 2 ]; do
+	eval2 $RM -f "$1"
+	shift 2
+done
+
+#
+# Remove sentinel
+#
+eval2 $RM -f .symlinks_created
+
+################################################################################
+# END
+################################################################################
