@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-05 17:24:31 -0800 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-05 17:25:23 -0800 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 0.6-beta-2 $'
+VERSION='$Version: 0.6 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -32,6 +32,9 @@ FAILURE=1
 #
 DEBUG=					# -d
 FILE_VIEW=				# -f
+FILTER_FILE=				# -F file
+FILTER_GROUP=				# -G group
+FILTER_USER=				# -U user
 GROUP_MAP="$DEFAULT_GROUP_MAP"		# -P file
 GROUP_VIEW=				# -g
 INTERVAL=$DEFAULT_INTERVAL		# -i sec
@@ -44,6 +47,8 @@ WIDE_VIEW=				# -w
 #
 # Miscellaneous
 #
+_FILTER_GROUP=
+_FILTER_USER=
 INTERVAL_PROBE= # Calculated
 INTERVAL_SECONDS= # Raw value for awk
 
@@ -62,7 +67,7 @@ die()
 usage()
 {
 	local fmt="$1"
-	local optfmt="\t%-10s %s\n"
+	local optfmt="\t%-11s %s\n"
 
 	exec >&2
 	if [ "$1" ]; then
@@ -73,7 +78,9 @@ usage()
 	printf "Usage: %s [OPTIONS]\n" "$pgm"
 	printf "Options:\n"
 	printf "$optfmt" "-d" "Debug. Print bpftrace script and exit."
+	printf "$optfmt" "-F file" "File filter (regex). Implies \`-f'."
 	printf "$optfmt" "-f" "View read/write activity by file. Implies \`-w'."
+	printf "$optfmt" "-G group" "Group filter (name or id)."
 	printf "$optfmt" "-g" "View read/write activity by group."
 	printf "$optfmt" "-h" "Print usage statement and exit."
 	printf "$optfmt" "-i sec" \
@@ -82,6 +89,7 @@ usage()
 	printf "$optfmt" "-P file" "Group map file. Default \`$GROUP_MAP'."
 	printf "$optfmt" "-p file" "User map file. Default \`$PASSWD_MAP'."
 	printf "$optfmt" "-r" "Raw view. Do not format output of bpftrace."
+	printf "$optfmt" "-U group" "User filter (name or id)."
 	printf "$optfmt" "-u" "View read/write activity by user (default)."
 	printf "$optfmt" "-v" "Print version and exit."
 	printf "$optfmt" "-w" "Wide view. Maximize width of first column."
@@ -103,16 +111,20 @@ run_bpftrace()
 #
 # Parse command-line options
 #
-while getopts dfghi:nP:p:ruvw flag; do
+while getopts dF:fG:ghi:nP:p:rU:uvw flag; do
 	case "$flag" in
 	d) DEBUG=1 RAW_VIEW=1 ;;
+	F) FILTER_FILE="$OPTARG" FILE_VIEW=1 \
+		WIDE_VIEW=1 GROUP_VIEW= USER_VIEW= ;;
 	f) FILE_VIEW=1 WIDE_VIEW=1 GROUP_VIEW= USER_VIEW= ;;
+	G) FILTER_GROUP="$OPTARG" ;;
 	g) GROUP_VIEW=1 FILE_VIEW= USER_VIEW= ;;
 	i) INTERVAL="$OPTARG" ;;
 	n) NO_NAMES=1 ;;
 	P) GROUP_MAP="$OPTARG" ;;
 	p) PASSWD_MAP="$OPTARG" ;;
 	r) RAW_VIEW=1 ;;
+	U) FILTER_USER="$OPTARG" ;;
 	u) USER_VIEW=1 FILE_VIEW= GROUP_VIEW= ;;
 	v) VERSION="${VERSION#*: }"
 		echo "${VERSION% $}"
@@ -146,6 +158,76 @@ case "$INTERVAL" in
 esac
 
 #
+# Process `-G group' option
+#
+case "$FILTER_GROUP" in
+"") : ok ;;
+*[!0-9]*) # name
+	_FILTER_GROUP=$( awk \
+		-v sq="'" \
+		-v group_map="$GROUP_MAP" \
+		-v name="$FILTER_GROUP" \
+	'BEGIN {
+		delete gid2name
+		while (getline < group_map > 0) {
+			n = split($0, fields, /:/)
+			name2gid[fields[1]] = fields[3]
+		}
+		close(group_map)
+		if (name in name2gid) {
+			print name2gid[name]
+			exit 0
+		}
+		gsub(sq, "&\\\\&&", name)
+		cmd = sprintf("getent group %s%s%s", sq, name, sq)
+		cmd | getline group
+		close(cmd)
+		if (split(group, fields, /:/) >= 3) {
+			print fields[3]
+			exit 0
+		}
+		exit 1
+	}' 2> /dev/null ) || die "Unknown group %s" "$FILTER_GROUP"
+	FILTER_GROUP="$_FILTER_GROUP"
+	;;
+esac
+
+#
+# Process `-U group' option
+#
+case "$FILTER_USER" in
+"") : ok ;;
+*[!0-9]*) # name
+	_FILTER_USER=$( awk \
+		-v sq="'" \
+		-v user_map="$PASSWD_MAP" \
+		-v name="$FILTER_USER" \
+	'BEGIN {
+		delete uid2name
+		while (getline < user_map > 0) {
+			n = split($0, fields, /:/)
+			name2uid[fields[1]] = fields[3]
+		}
+		close(user_map)
+		if (name in name2uid) {
+			print name2uid[name]
+			exit 0
+		}
+		gsub(sq, "&\\\\&&", name)
+		cmd = sprintf("getent passwd %s%s%s", sq, name, sq)
+		cmd | getline passwd
+		close(cmd)
+		if (split(passwd, fields, /:/) >= 3) {
+			print fields[3]
+			exit 0
+		}
+		exit 1
+	}' ) || die "Unknown user %s" "$FILTER_USER"
+	FILTER_USER="$_FILTER_USER"
+	;;
+esac
+
+#
 # Get terminal size
 #
 size=$( stty size 2> /dev/null )
@@ -163,6 +245,7 @@ fi
 #
 # Trace nfsd I/O
 #
+export FILTER_FILE
 run_bpftrace /dev/stdin <<EOF | awk \
 	-v cols=$cols \
 	-v file_view=${FILE_VIEW:-0} \
@@ -178,6 +261,8 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	'####################################### BEGIN
 
 	BEGIN {
+		filter_file = ENVIRON["FILTER_FILE"]
+
 		if (wide_view) {
 			vsz = cols - 36 - 4 - 21 # Maximize view column
 				# 36 = 3 x %12s
@@ -331,6 +416,8 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	parse_map() {
 		if (file_view) {
 			cred = path
+			if (filter_file != "" && path !~ filter_file)
+				next
 		} else if (group_view) {
 			cred = gid
 		} else { # Default
@@ -428,6 +515,9 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	# END
 	############################################################
 ' # END-QUOTE
+/* -*- mode: dtrace-script; tab-width: 4 -*- ;; Emacs
+ * vi: set ft=dtrace noet ts=4 sw=4 :: Vi/ViM
+ */
 ////////////////////////////////////////////////// INCLUDES
 
 #include <linux/sunrpc/svc.h>
@@ -465,21 +555,29 @@ kretprobe:nfsd_read
 	delete(@nfsd_read_countp[tid]);
 	delete(@nfsd_read_rqstp[tid]);
 
+	\$filtered = 0;
+${FILTER_USER:+"
+	if (\$uid != $FILTER_USER) { \$filtered = 1; }"}
+${FILTER_GROUP:+"
+	if (\$gid != $FILTER_GROUP) { \$filtered = 1; }"}
+
+	if (\$filtered == 0) {
 $( if [ "$FILE_VIEW" ]; then cat <<VIEW
-	\$file = @nfsd_read_file[tid];
-	\$de = \$file->f_dentry;
-	\$n1 = \$de->d_name.name;
-	\$de = \$de->d_parent;
-	\$n2 = \$de->d_name.name;
+		\$file = @nfsd_read_file[tid];
+		\$de = \$file->f_dentry;
+		\$n1 = \$de->d_name.name;
+		\$de = \$de->d_parent;
+		\$n2 = \$de->d_name.name;
 
-	delete(@nfsd_read_file[tid]);
+		delete(@nfsd_read_file[tid]);
 
-	@nfsd_read[str(\$n2), str(\$n1)] = sum(\$bytes);
+		@nfsd_read[str(\$n2), str(\$n1)] = sum(\$bytes);
 VIEW
 else cat <<VIEW
-	@nfsd_read[\$uid, \$gid] = sum(\$bytes);
+		@nfsd_read[\$uid, \$gid] = sum(\$bytes);
 VIEW
 fi )
+	}
 }
 
 ////////////////////////////////////////////////// WRITE PROBES
@@ -508,21 +606,29 @@ kretprobe:nfsd_write
 	delete(@nfsd_write_countp[tid]);
 	delete(@nfsd_write_rqstp[tid]);
 
+	\$filtered = 0;
+${FILTER_USER:+"
+	if (\$uid != $FILTER_USER) { \$filtered = 1; }"}
+${FILTER_GROUP:+"
+	if (\$gid != $FILTER_GROUP) { \$filtered = 1; }"}
+
+	if (\$filtered == 0) {
 $( if [ "$FILE_VIEW" ]; then cat <<VIEW
-	\$file = @nfsd_write_file[tid];
-	\$de = \$file->f_dentry;
-	\$n1 = \$de->d_name.name;
-	\$de = \$de->d_parent;
-	\$n2 = \$de->d_name.name;
+		\$file = @nfsd_write_file[tid];
+		\$de = \$file->f_dentry;
+		\$n1 = \$de->d_name.name;
+		\$de = \$de->d_parent;
+		\$n2 = \$de->d_name.name;
 
-	delete(@nfsd_write_file[tid]);
+		delete(@nfsd_write_file[tid]);
 
-	@nfsd_write[str(\$n2), str(\$n1)] = sum(\$bytes);
+		@nfsd_write[str(\$n2), str(\$n1)] = sum(\$bytes);
 VIEW
 else cat <<VIEW
-	@nfsd_write[\$uid, \$gid] = sum(\$bytes);
+		@nfsd_write[\$uid, \$gid] = sum(\$bytes);
 VIEW
 fi )
+	}
 }
 
 ////////////////////////////////////////////////// INTERVAL PROBE
