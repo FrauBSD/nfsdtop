@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 0.5
+Version: 0.6
 Release: 1
 Buildarch: noarch
 
@@ -75,6 +75,10 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Thu Mar  5 2020 Devin Teske <dteske@fraubsd.org> 0.6-1
+- 29d7a21 Add -F file, -G group, and -U user filter options
+- d4a93a7 Make header bold
+- 047a1f6 Simplify usage synopsis
 * Thu Mar  5 2020 Devin Teske <dteske@fraubsd.org> 0.5-1
 - 5d46d31 Make screen redraws smoother
 - bfe3f78 Print the interval atop the header
