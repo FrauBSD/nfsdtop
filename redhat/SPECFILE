@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 0.6
+Version: 0.7
 Release: 1
 Buildarch: noarch
 
@@ -75,6 +75,8 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Fri Mar  6 2020 Devin Teske <dteske@fraubsd.org> 0.7-1
+- a686ace Add -j to output stats in JSON
 * Thu Mar  5 2020 Devin Teske <dteske@fraubsd.org> 0.6-1
 - 29d7a21 Add -F file, -G group, and -U user filter options
 - d4a93a7 Make header bold
