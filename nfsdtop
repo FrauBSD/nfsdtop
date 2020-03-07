@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-05 17:25:23 -0800 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-06 17:21:23 -0800 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 0.6 $'
+VERSION='$Version: 0.7 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -39,6 +39,7 @@ GROUP_MAP="$DEFAULT_GROUP_MAP"		# -P file
 GROUP_VIEW=				# -g
 INTERVAL=$DEFAULT_INTERVAL		# -i sec
 NO_NAMES=				# -n
+OUTPUT_JSON=				# -j
 PASSWD_MAP="$DEFAULT_PASSWD_MAP"	# -p file
 RAW_VIEW=				# -r
 USER_VIEW=1				# -u (default)
@@ -86,6 +87,7 @@ usage()
 	printf "$optfmt" "-i sec" \
 		"Set interval seconds. Default $DEFAULT_INTERVAL."
 	printf "$optfmt" "" "Accepts decimal point on seconds."
+	printf "$optfmt" "-j" "Output JSON formatted data."
 	printf "$optfmt" "-P file" "Group map file. Default \`$GROUP_MAP'."
 	printf "$optfmt" "-p file" "User map file. Default \`$PASSWD_MAP'."
 	printf "$optfmt" "-r" "Raw view. Do not format output of bpftrace."
@@ -111,7 +113,7 @@ run_bpftrace()
 #
 # Parse command-line options
 #
-while getopts dF:fG:ghi:nP:p:rU:uvw flag; do
+while getopts dF:fG:ghi:jnP:p:rU:uvw flag; do
 	case "$flag" in
 	d) DEBUG=1 RAW_VIEW=1 ;;
 	F) FILTER_FILE="$OPTARG" FILE_VIEW=1 \
@@ -120,6 +122,7 @@ while getopts dF:fG:ghi:nP:p:rU:uvw flag; do
 	G) FILTER_GROUP="$OPTARG" ;;
 	g) GROUP_VIEW=1 FILE_VIEW= USER_VIEW= ;;
 	i) INTERVAL="$OPTARG" ;;
+	j) OUTPUT_JSON=1 ;;
 	n) NO_NAMES=1 ;;
 	P) GROUP_MAP="$OPTARG" ;;
 	p) PASSWD_MAP="$OPTARG" ;;
@@ -253,6 +256,7 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	-v group_view=${GROUP_VIEW:-0} \
 	-v interval=$INTERVAL_SECONDS \
 	-v no_names=${NO_NAMES:-0} \
+	-v output_json=${OUTPUT_JSON:-0} \
 	-v passwd_map="$PASSWD_MAP" \
 	-v raw_view=${RAW_VIEW:-0} \
 	-v rows=$rows \
@@ -262,6 +266,7 @@ run_bpftrace /dev/stdin <<EOF | awk \
 
 	BEGIN {
 		filter_file = ENVIRON["FILTER_FILE"]
+		waiting = "Waiting for bpftrace to initialize ..."
 
 		if (wide_view) {
 			vsz = cols - 36 - 4 - 21 # Maximize view column
@@ -294,8 +299,10 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		if (!raw_view) {
 			clear_buffer()
 			buffer_add_header()
-			buffer_add("Waiting for bpftrace to initialize ...\n")
-			print_buffer()
+			if (!output_json) {
+				buffer_add(waiting "\n")
+				print_buffer()
+			}
 			if (!no_names) load_files()
 		}
 
@@ -315,11 +322,13 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	function clear_buffer()
 	{
 		BUFFER = ""
-		buffer_add(sprintf("\033[H\033[J"))
+		if (!output_json)
+			buffer_add(sprintf("\033[H\033[J"))
 	}
 
 	function buffer_add_header()
 	{
+		if (output_json) return
 		buffer_add(sprintf("Interval: %-*s %31s\n",
 			fmtsz - 9 - 2 - 31,
 			sprintf("%.3f", interval) "s",
@@ -395,6 +404,22 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		return nitems
 	}
 
+	function json_add(json, key, format, value)
+	{
+		return json (length(json) < 2 ? "" : ",") \
+			sprintf("\"%s\":" format, key, value)
+	}
+
+	function json_add_str(json, key, value)
+	{
+		return json_add(json, key, "\"%s\"", value)
+	}
+
+	function json_add_uint(json, key, value)
+	{
+		return json_add(json, key, "%u", value)
+	}
+
 	######################################## MAIN
 
 	raw_view {
@@ -409,7 +434,7 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	}
 
 	sub(/^info\|/, "") {
-		print
+		if (!output_json) print
 		next
 	}
 
@@ -450,15 +475,28 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		read_bar = ""
 		write_rate = write_total / interval
 		write_bar = ""
-		buffer_add(sprintf(fmt, "total",
-			humanize(write_rate + read_rate),
-			humanize(write_rate), bar_size, write_bar,
-			bar_size, read_bar, humanize(read_rate)))
+		if (output_json) {
+			json_out = ""
+			json_out = json_add_uint(json_out, "time", systime())
+			json_out = json_add_str(json_out, "ident", "total")
+			json_out = json_add_uint(json_out,
+				"total_bytes", write_total + read_total)
+			json_out = json_add_uint(json_out,
+				"write_bytes", write_total)
+			json_out = json_add_uint(json_out,
+				"read_bytes", read_total)
+			buffer_add("{" json_out "}\n")
+		} else {
+			buffer_add(sprintf(fmt, "total",
+				humanize(write_rate + read_rate),
+				humanize(write_rate), bar_size, write_bar,
+				bar_size, read_bar, humanize(read_rate)))
+		}
 
 		# Sort values, extract cred, and print
-		table_rows = rows - 4
 		r = 1
 		n = _asort(read_write, read_write_sorted)
+		table_rows = output_json ? n : rows - 4
 		for (i = n; i >= 1 && r++ <= table_rows; i--) {
 			cred = read_write_sorted[i]
 			sub(/^ *[^ ]+ +/, "", cred)
@@ -487,16 +525,35 @@ run_bpftrace /dev/stdin <<EOF | awk \
 					if (cred in uid2name)
 						cred = uid2name[cred]
 				}
-				if (length(cred) > vsz) {
+				if (!output_json && length(cred) > vsz) {
 					cred = "..." substr(cred,
 						length(cred) - vsz + 4)
 				}
 			}
 
-			buffer_add(sprintf(fmt, cred,
-				humanize(write_rate + read_rate),
-				humanize(write_rate), bar_size, write_bar,
-				bar_size, read_bar, humanize(read_rate)))
+			if (output_json) {
+				json_out = ""
+				json_out = json_add_uint(json_out,
+					"time", systime())
+				json_out = json_add_str(json_out,
+					"ident", tolower(view))
+				json_out = json_add_str(json_out,
+					tolower(view), cred)
+				json_out = json_add_uint(json_out,
+					"total_bytes",
+					write_total + read_total)
+				json_out = json_add_uint(json_out,
+					"write_bytes", write_total)
+				json_out = json_add_uint(json_out,
+					"read_bytes", read_total)
+				buffer_add("{" json_out "}\n")
+			} else {
+				buffer_add(sprintf(fmt, cred,
+					humanize(write_rate + read_rate),
+					humanize(write_rate), bar_size,
+					write_bar, bar_size, read_bar,
+					humanize(read_rate)))
+			}
 		}
 		if (i > 0) buffer_add(sprintf("(%d more) ... ", i))
 
