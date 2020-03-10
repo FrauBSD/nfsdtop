@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 0.7
+Version: 0.7.1
 Release: 1
 Buildarch: noarch
 
@@ -75,6 +75,8 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Fri Mar 10 2020 Devin Teske <dteske@fraubsd.org> 0.7.1-1
+- 6cddcd5 Use K&R-style naming for view options NFC
 * Fri Mar  6 2020 Devin Teske <dteske@fraubsd.org> 0.7-1
 - a686ace Add -j to output stats in JSON
 * Thu Mar  5 2020 Devin Teske <dteske@fraubsd.org> 0.6-1
