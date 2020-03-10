@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 0.8
+Version: 0.8.1
 Release: 1
 Buildarch: noarch
 
@@ -75,6 +75,8 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Fri Mar 10 2020 Devin Teske <dteske@fraubsd.org> 0.8.1-1
+- 9e483ad Whitespace NFC
 * Fri Mar 10 2020 Devin Teske <dteske@fraubsd.org> 0.8-1
 - b2436b2 Add -c option to view stats by-client
 * Fri Mar 10 2020 Devin Teske <dteske@fraubsd.org> 0.7.1-1
