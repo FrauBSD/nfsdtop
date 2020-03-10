@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-06 17:21:23 -0800 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-10 13:36:28 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 0.7 $'
+VERSION='$Version: 0.7.1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -31,18 +31,18 @@ FAILURE=1
 # Command-line options
 #
 DEBUG=					# -d
-FILE_VIEW=				# -f
 FILTER_FILE=				# -F file
 FILTER_GROUP=				# -G group
 FILTER_USER=				# -U user
 GROUP_MAP="$DEFAULT_GROUP_MAP"		# -P file
-GROUP_VIEW=				# -g
 INTERVAL=$DEFAULT_INTERVAL		# -i sec
 NO_NAMES=				# -n
 OUTPUT_JSON=				# -j
 PASSWD_MAP="$DEFAULT_PASSWD_MAP"	# -p file
 RAW_VIEW=				# -r
-USER_VIEW=1				# -u (default)
+VIEW_FILE=				# -f
+VIEW_GROUP=				# -g
+VIEW_USER=1				# -u (default)
 WIDE_VIEW=				# -w
 
 #
@@ -116,11 +116,11 @@ run_bpftrace()
 while getopts dF:fG:ghi:jnP:p:rU:uvw flag; do
 	case "$flag" in
 	d) DEBUG=1 RAW_VIEW=1 ;;
-	F) FILTER_FILE="$OPTARG" FILE_VIEW=1 \
-		WIDE_VIEW=1 GROUP_VIEW= USER_VIEW= ;;
-	f) FILE_VIEW=1 WIDE_VIEW=1 GROUP_VIEW= USER_VIEW= ;;
+	F) FILTER_FILE="$OPTARG" VIEW_FILE=1 \
+		VIEW_GROUP= VIEW_USER= WIDE_VIEW=1 ;;
+	f) VIEW_FILE=1 VIEW_GROUP= VIEW_USER= WIDE_VIEW=1 ;;
 	G) FILTER_GROUP="$OPTARG" ;;
-	g) GROUP_VIEW=1 FILE_VIEW= USER_VIEW= ;;
+	g) VIEW_GROUP=1 VIEW_FILE= VIEW_USER= ;;
 	i) INTERVAL="$OPTARG" ;;
 	j) OUTPUT_JSON=1 ;;
 	n) NO_NAMES=1 ;;
@@ -128,7 +128,7 @@ while getopts dF:fG:ghi:jnP:p:rU:uvw flag; do
 	p) PASSWD_MAP="$OPTARG" ;;
 	r) RAW_VIEW=1 ;;
 	U) FILTER_USER="$OPTARG" ;;
-	u) USER_VIEW=1 FILE_VIEW= GROUP_VIEW= ;;
+	u) VIEW_USER=1 VIEW_FILE= VIEW_GROUP= ;;
 	v) VERSION="${VERSION#*: }"
 		echo "${VERSION% $}"
 		exit $SUCCESS ;;
@@ -251,16 +251,16 @@ fi
 export FILTER_FILE
 run_bpftrace /dev/stdin <<EOF | awk \
 	-v cols=$cols \
-	-v file_view=${FILE_VIEW:-0} \
 	-v group_map="$GROUP_MAP" \
-	-v group_view=${GROUP_VIEW:-0} \
 	-v interval=$INTERVAL_SECONDS \
 	-v no_names=${NO_NAMES:-0} \
 	-v output_json=${OUTPUT_JSON:-0} \
 	-v passwd_map="$PASSWD_MAP" \
 	-v raw_view=${RAW_VIEW:-0} \
 	-v rows=$rows \
-	-v user_view=${USER_VIEW:-0} \
+	-v view_file=${VIEW_FILE:-0} \
+	-v view_group=${VIEW_GROUP:-0} \
+	-v view_user=${VIEW_USER:-0} \
 	-v wide_view=${WIDE_VIEW:-0} \
 	'####################################### BEGIN
 
@@ -288,9 +288,9 @@ run_bpftrace /dev/stdin <<EOF | awk \
 			#  1 = "|" between bars
 
 		# Column headers
-		if (file_view) {
+		if (view_file) {
 			view = "FILE"
-		} else if (group_view) {
+		} else if (view_group) {
 			view = "GROUP"
 		} else { # Default
 			view = "USER"
@@ -362,7 +362,7 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	{
 		if (!match($0, /^@[^\[]*\[/)) return 0
 		map = substr($0, RSTART + 1, RLENGTH - 2)
-		if (file_view) {
+		if (view_file) {
 			match($0, /\[.*\]:/)
 			path = substr($0, RSTART + 1, RLENGTH - 3)
 			gsub(/, /, "/", path)
@@ -439,11 +439,11 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	}
 
 	parse_map() {
-		if (file_view) {
+		if (view_file) {
 			cred = path
 			if (filter_file != "" && path !~ filter_file)
 				next
-		} else if (group_view) {
+		} else if (view_group) {
 			cred = gid
 		} else { # Default
 			cred = uid
@@ -518,10 +518,10 @@ run_bpftrace /dev/stdin <<EOF | awk \
 			sub(/.$/, ">", read_bar)
 
 			if (!no_names) {
-				if (group_view) {
+				if (view_group) {
 					if (cred in gid2name)
 						cred = gid2name[cred]
-				} else if (user_view) {
+				} else if (view_user) {
 					if (cred in uid2name)
 						cred = uid2name[cred]
 				}
@@ -593,7 +593,7 @@ kprobe:nfsd_read
 	@nfsd_read_rqstp[tid] = (struct svc_rqst *)arg0;
 	@nfsd_read_countp[tid] = arg5;
 }
-${FILE_VIEW:+"
+${VIEW_FILE:+"
 kprobe:nfsd_init_raparms
 /@nfsd_read_rqstp[tid] != 0/
 {
@@ -619,7 +619,7 @@ ${FILTER_GROUP:+"
 	if (\$gid != $FILTER_GROUP) { \$filtered = 1; }"}
 
 	if (\$filtered == 0) {
-$( if [ "$FILE_VIEW" ]; then cat <<VIEW
+$( if [ "$VIEW_FILE" ]; then cat <<VIEW
 		\$file = @nfsd_read_file[tid];
 		\$de = \$file->f_dentry;
 		\$n1 = \$de->d_name.name;
@@ -644,7 +644,7 @@ kprobe:nfsd_write
 	@nfsd_write_rqstp[tid] = (struct svc_rqst *)arg0;
 	@nfsd_write_countp[tid] = arg5;
 }
-${FILE_VIEW:+"
+${VIEW_FILE:+"
 kprobe:nfsd_vfs_write
 /@nfsd_write_rqstp[tid] != 0/
 {
@@ -670,7 +670,7 @@ ${FILTER_GROUP:+"
 	if (\$gid != $FILTER_GROUP) { \$filtered = 1; }"}
 
 	if (\$filtered == 0) {
-$( if [ "$FILE_VIEW" ]; then cat <<VIEW
+$( if [ "$VIEW_FILE" ]; then cat <<VIEW
 		\$file = @nfsd_write_file[tid];
 		\$de = \$file->f_dentry;
 		\$n1 = \$de->d_name.name;
@@ -711,13 +711,13 @@ END
 {
 	// Clear read
 	clear(@nfsd_read);
-	clear(@nfsd_read_countp);${FILE_VIEW:+
+	clear(@nfsd_read_countp);${VIEW_FILE:+
 	clear(@nfsd_read_file);}
 	clear(@nfsd_read_rqstp);
 
 	// Clear write
 	clear(@nfsd_write);
-	clear(@nfsd_write_countp);${FILE_VIEW:+
+	clear(@nfsd_write_countp);${VIEW_FILE:+
 	clear(@nfsd_write_file);}
 	clear(@nfsd_write_rqstp);
 }
