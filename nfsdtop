@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-10 13:36:28 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-10 13:38:48 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 0.7.1 $'
+VERSION='$Version: 0.8 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -40,6 +40,7 @@ NO_NAMES=				# -n
 OUTPUT_JSON=				# -j
 PASSWD_MAP="$DEFAULT_PASSWD_MAP"	# -p file
 RAW_VIEW=				# -r
+VIEW_CLIENT=				# -c
 VIEW_FILE=				# -f
 VIEW_GROUP=				# -g
 VIEW_USER=1				# -u (default)
@@ -78,6 +79,8 @@ usage()
 
 	printf "Usage: %s [OPTIONS]\n" "$pgm"
 	printf "Options:\n"
+	printf "$optfmt" "-c" \
+		"View read/write activity by client. Implies \`-w'."
 	printf "$optfmt" "-d" "Debug. Print bpftrace script and exit."
 	printf "$optfmt" "-F file" "File filter (regex). Implies \`-f'."
 	printf "$optfmt" "-f" "View read/write activity by file. Implies \`-w'."
@@ -113,14 +116,15 @@ run_bpftrace()
 #
 # Parse command-line options
 #
-while getopts dF:fG:ghi:jnP:p:rU:uvw flag; do
+while getopts cdF:fG:ghi:jnP:p:rU:uvw flag; do
 	case "$flag" in
+	c) VIEW_CLIENT=1 VIEW_FILE= VIEW_GROUP= VIEW_USER= ;;
 	d) DEBUG=1 RAW_VIEW=1 ;;
 	F) FILTER_FILE="$OPTARG" VIEW_FILE=1 \
-		VIEW_GROUP= VIEW_USER= WIDE_VIEW=1 ;;
-	f) VIEW_FILE=1 VIEW_GROUP= VIEW_USER= WIDE_VIEW=1 ;;
+		VIEW_CLIENT= VIEW_GROUP= VIEW_USER= WIDE_VIEW=1 ;;
+	f) VIEW_FILE=1 VIEW_CLIENT= VIEW_GROUP= VIEW_USER= WIDE_VIEW=1 ;;
 	G) FILTER_GROUP="$OPTARG" ;;
-	g) VIEW_GROUP=1 VIEW_FILE= VIEW_USER= ;;
+	g) VIEW_GROUP=1 VIEW_CLIENT= VIEW_FILE= VIEW_USER= ;;
 	i) INTERVAL="$OPTARG" ;;
 	j) OUTPUT_JSON=1 ;;
 	n) NO_NAMES=1 ;;
@@ -128,7 +132,7 @@ while getopts dF:fG:ghi:jnP:p:rU:uvw flag; do
 	p) PASSWD_MAP="$OPTARG" ;;
 	r) RAW_VIEW=1 ;;
 	U) FILTER_USER="$OPTARG" ;;
-	u) VIEW_USER=1 VIEW_FILE= VIEW_GROUP= ;;
+	u) VIEW_USER=1 VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= ;;
 	v) VERSION="${VERSION#*: }"
 		echo "${VERSION% $}"
 		exit $SUCCESS ;;
@@ -258,6 +262,7 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	-v passwd_map="$PASSWD_MAP" \
 	-v raw_view=${RAW_VIEW:-0} \
 	-v rows=$rows \
+	-v view_client=${VIEW_CLIENT:-0} \
 	-v view_file=${VIEW_FILE:-0} \
 	-v view_group=${VIEW_GROUP:-0} \
 	-v view_user=${VIEW_USER:-0} \
@@ -288,7 +293,9 @@ run_bpftrace /dev/stdin <<EOF | awk \
 			#  1 = "|" between bars
 
 		# Column headers
-		if (view_file) {
+		if (view_client) {
+			view = "CLIENT"
+		} else if (view_file) {
 			view = "FILE"
 		} else if (view_group) {
 			view = "GROUP"
@@ -362,7 +369,10 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	{
 		if (!match($0, /^@[^\[]*\[/)) return 0
 		map = substr($0, RSTART + 1, RLENGTH - 2)
-		if (view_file) {
+		if (view_client) {
+			match($0, /\[.*\]:/)
+			client = substr($0, RSTART + 1, RLENGTH - 3)
+		} else if (view_file) {
 			match($0, /\[.*\]:/)
 			path = substr($0, RSTART + 1, RLENGTH - 3)
 			gsub(/, /, "/", path)
@@ -439,7 +449,9 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	}
 
 	parse_map() {
-		if (view_file) {
+		if (view_client) {
+			cred = client
+		} else if (view_file) {
 			cred = path
 			if (filter_file != "" && path !~ filter_file)
 				next
@@ -619,7 +631,17 @@ ${FILTER_GROUP:+"
 	if (\$gid != $FILTER_GROUP) { \$filtered = 1; }"}
 
 	if (\$filtered == 0) {
-$( if [ "$VIEW_FILE" ]; then cat <<VIEW
+$( if [ "$VIEW_CLIENT" ]; then cat <<VIEW
+		if (\$rqstp->rq_addr.ss_family == AF_INET) {
+			\$data = (int64 *)\$rqstp->rq_addr.__data;
+			\$num = (int64)*\$data;
+			\$ip4 = \$num >> 16 & 0xFFFFFFFF;
+			\$client = ntop(AF_INET, \$ip4);
+
+			@nfsd_read[\$client] = sum(\$bytes);
+		}
+VIEW
+elif [ "$VIEW_FILE" ]; then cat <<VIEW
 		\$file = @nfsd_read_file[tid];
 		\$de = \$file->f_dentry;
 		\$n1 = \$de->d_name.name;
@@ -670,7 +692,17 @@ ${FILTER_GROUP:+"
 	if (\$gid != $FILTER_GROUP) { \$filtered = 1; }"}
 
 	if (\$filtered == 0) {
-$( if [ "$VIEW_FILE" ]; then cat <<VIEW
+$( if [ "$VIEW_CLIENT" ]; then cat <<VIEW
+		if (\$rqstp->rq_addr.ss_family == AF_INET) {
+			\$data = (int64 *)\$rqstp->rq_addr.__data;
+			\$num = (int64)*\$data;
+			\$ip4 = \$num >> 16 & 0xFFFFFFFF;
+			\$client = ntop(AF_INET, \$ip4);
+
+			@nfsd_write[\$client] = sum(\$bytes);
+		}
+VIEW
+elif [ "$VIEW_FILE" ]; then cat <<VIEW
 		\$file = @nfsd_write_file[tid];
 		\$de = \$file->f_dentry;
 		\$n1 = \$de->d_name.name;
