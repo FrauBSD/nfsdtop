@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-10 13:38:48 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-10 13:40:27 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 0.8 $'
+VERSION='$Version: 0.8.1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -83,7 +83,8 @@ usage()
 		"View read/write activity by client. Implies \`-w'."
 	printf "$optfmt" "-d" "Debug. Print bpftrace script and exit."
 	printf "$optfmt" "-F file" "File filter (regex). Implies \`-f'."
-	printf "$optfmt" "-f" "View read/write activity by file. Implies \`-w'."
+	printf "$optfmt" "-f" \
+		"View read/write activity by file. Implies \`-w'."
 	printf "$optfmt" "-G group" "Group filter (name or id)."
 	printf "$optfmt" "-g" "View read/write activity by group."
 	printf "$optfmt" "-h" "Print usage statement and exit."
