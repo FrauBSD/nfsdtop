@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-10 14:50:51 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-10 14:52:09 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 0.9-beta-2 $'
+VERSION='$Version: 0.9 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -43,6 +43,7 @@ RAW_VIEW=				# -r
 VIEW_CLIENT=				# -c
 VIEW_FILE=				# -f
 VIEW_GROUP=				# -g
+VIEW_SERVER=				# -s
 VIEW_USER=1				# -u (default)
 WIDE_VIEW=				# -w
 
@@ -94,6 +95,7 @@ usage()
 	printf "$optfmt" "-P file" "Group map file. Default \`$GROUP_MAP'."
 	printf "$optfmt" "-p file" "User map file. Default \`$PASSWD_MAP'."
 	printf "$optfmt" "-r" "Raw view. Do not format output of bpftrace."
+	printf "$optfmt" "-s" "View read/write activity by server IP."
 	printf "$optfmt" "-U group" "User filter (name or id)."
 	printf "$optfmt" "-u" "View read/write activity by user (default)."
 	printf "$optfmt" "-v" "Print version and exit."
@@ -116,23 +118,25 @@ run_bpftrace()
 #
 # Parse command-line options
 #
-while getopts cdF:fG:ghi:jnP:p:rU:uvw flag; do
+while getopts cdF:fG:ghi:jnP:p:rsU:uvw flag; do
 	case "$flag" in
-	c) VIEW_CLIENT=1 VIEW_FILE= VIEW_GROUP= VIEW_USER= ;;
+	c) VIEW_CLIENT=1 VIEW_FILE= VIEW_GROUP= VIEW_SERVER= VIEW_USER= ;;
 	d) DEBUG=1 RAW_VIEW=1 ;;
-	F) FILTER_FILE="$OPTARG" VIEW_FILE=1 \
-		VIEW_CLIENT= VIEW_GROUP= VIEW_USER= WIDE_VIEW=1 ;;
-	f) VIEW_FILE=1 VIEW_CLIENT= VIEW_GROUP= VIEW_USER= WIDE_VIEW=1 ;;
+	F) FILTER_FILE="$OPTARG" VIEW_FILE=1 WIDE_VIEW=1 \
+		VIEW_CLIENT= VIEW_GROUP= VIEW_SERVER= VIEW_USER= ;;
+	f) VIEW_FILE=1 WIDE_VIEW=1 \
+		VIEW_CLIENT= VIEW_GROUP= VIEW_SERVER= VIEW_USER= ;;
 	G) FILTER_GROUP="$OPTARG" ;;
-	g) VIEW_GROUP=1 VIEW_CLIENT= VIEW_FILE= VIEW_USER= ;;
+	g) VIEW_GROUP=1 VIEW_CLIENT= VIEW_FILE= VIEW_SERVER= VIEW_USER= ;;
 	i) INTERVAL="$OPTARG" ;;
 	j) OUTPUT_JSON=1 ;;
 	n) NO_NAMES=1 ;;
 	P) GROUP_MAP="$OPTARG" ;;
 	p) PASSWD_MAP="$OPTARG" ;;
 	r) RAW_VIEW=1 ;;
+	s) VIEW_SERVER=1 VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= VIEW_USER= ;;
 	U) FILTER_USER="$OPTARG" ;;
-	u) VIEW_USER=1 VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= ;;
+	u) VIEW_USER=1 VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= VIEW_SERVER= ;;
 	v) VERSION="${VERSION#*: }"
 		echo "${VERSION% $}"
 		exit $SUCCESS ;;
@@ -265,6 +269,7 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	-v view_client=${VIEW_CLIENT:-0} \
 	-v view_file=${VIEW_FILE:-0} \
 	-v view_group=${VIEW_GROUP:-0} \
+	-v view_server=${VIEW_SERVER:-0} \
 	-v view_user=${VIEW_USER:-0} \
 	-v wide_view=${WIDE_VIEW:-0} \
 	'####################################### BEGIN
@@ -299,6 +304,8 @@ run_bpftrace /dev/stdin <<EOF | awk \
 			view = "FILE"
 		} else if (view_group) {
 			view = "GROUP"
+		} else if (view_server) {
+			view = "SERVER"
 		} else { # Default
 			view = "USER"
 		}
@@ -369,9 +376,9 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	{
 		if (!match($0, /^@[^\[]*\[/)) return 0
 		map = substr($0, RSTART + 1, RLENGTH - 2)
-		if (view_client) {
+		if (view_client || view_server) {
 			match($0, /\[.*\]:/)
-			client = substr($0, RSTART + 1, RLENGTH - 3)
+			ip = substr($0, RSTART + 1, RLENGTH - 3)
 		} else if (view_file) {
 			match($0, /\[.*\]:/)
 			path = substr($0, RSTART + 1, RLENGTH - 3)
@@ -449,8 +456,8 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	}
 
 	parse_map() {
-		if (view_client) {
-			cred = client
+		if (view_client || view_server) {
+			cred = ip
 		} else if (view_file) {
 			cred = path
 			if (filter_file != "" && path !~ filter_file)
@@ -652,6 +659,16 @@ elif [ "$VIEW_FILE" ]; then cat <<VIEW
 
 		@nfsd_read[str(\$n2), str(\$n1)] = sum(\$bytes);
 VIEW
+elif [ "$VIEW_SERVER" ]; then cat <<VIEW
+		if (\$rqstp->rq_daddr.ss_family == AF_INET) {
+			\$data = (int64 *)\$rqstp->rq_daddr.__data;
+			\$num = (int64)*\$data;
+			\$ip4 = \$num >> 16 & 0xFFFFFFFF;
+			\$server = ntop(AF_INET, \$ip4);
+
+			@nfsd_read[\$server] = sum(\$bytes);
+		}
+VIEW
 else cat <<VIEW
 		@nfsd_read[\$uid, \$gid] = sum(\$bytes);
 VIEW
@@ -712,6 +729,16 @@ elif [ "$VIEW_FILE" ]; then cat <<VIEW
 		delete(@nfsd_write_file[tid]);
 
 		@nfsd_write[str(\$n2), str(\$n1)] = sum(\$bytes);
+VIEW
+elif [ "$VIEW_SERVER" ]; then cat <<VIEW
+		if (\$rqstp->rq_daddr.ss_family == AF_INET) {
+			\$data = (int64 *)\$rqstp->rq_daddr.__data;
+			\$num = (int64)*\$data;
+			\$ip4 = \$num >> 16 & 0xFFFFFFFF;
+			\$server = ntop(AF_INET, \$ip4);
+
+			@nfsd_write[\$server] = sum(\$bytes);
+		}
 VIEW
 else cat <<VIEW
 		@nfsd_write[\$uid, \$gid] = sum(\$bytes);
