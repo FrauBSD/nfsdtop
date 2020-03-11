@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-10 17:02:38 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-10 17:03:32 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 1.0-beta-2 $'
+VERSION='$Version: 1.0-beta-3 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -156,7 +156,7 @@ shift $(( $OPTIND - 1 ))
 # Validate `-i sec' option
 #
 case "$INTERVAL" in
-"") die "missing -i argument" ;;
+"") usage "missing -i argument" ;; # NOTREACHED
 0) die "-i sec must be non-zero" ;;
 *[!0-9.]*|*.*.*|.) die "-i argument must be a number" ;;
 *.*)
