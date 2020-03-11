@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-10 17:03:32 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-10 17:06:04 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 1.0-beta-3 $'
+VERSION='$Version: 1.0-beta-4 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -162,7 +162,18 @@ case "$INTERVAL" in
 *.*)
 	INTERVAL_SECONDS=$INTERVAL
 	ms=$( echo "$INTERVAL * 1000" | bc )
-	INTERVAL_PROBE=interval:ms:${ms%%.*}
+	ms="${ms%%.*}"
+
+	#
+	# If, after multiplying by 1000 to convert sec to msec,
+	# the leading [non-decimal] digit is either missing or zero,
+	# the input was too small to produce timing of at least 1 msec
+	#
+	case "$ms" in
+	""|0) die "-i argument must be at least 0.001" ;;
+	esac
+
+	INTERVAL_PROBE=interval:ms:$ms
 	;;
 *)
 	INTERVAL_SECONDS=$INTERVAL
