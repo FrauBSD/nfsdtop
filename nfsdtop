@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-10 17:07:53 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-10 17:10:25 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 1.0-beta-5 $'
+VERSION='$Version: 1.0-beta-6 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -531,18 +531,20 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		for (i = n; i >= 1 && r++ <= table_rows; i--) {
 			cred = read_write_sorted[i]
 			sub(/^ *[^ ]+ +/, "", cred)
-			write_rate = write[cred] / interval
+			cred_read = read[cred]
+			cred_write = write[cred]
 
+			write_rate = cred_write / interval
 			if (write_total > 0)
-				write_bar_pct = write[cred] / write_total
+				write_bar_pct = cred_write / write_total
 			write_bar_size = bar_size * write_bar_pct
 			write_bar = sprintf("%*s", write_bar_size, "")
 			gsub(/ /, "=", write_bar)
 			sub(/^./, "<", write_bar)
 
-			read_rate = read[cred] / interval
+			read_rate = cred_read / interval
 			if (read_total > 0)
-				read_bar_pct = read[cred] / read_total
+				read_bar_pct = cred_read / read_total
 			read_bar_size = bar_size * read_bar_pct
 			read_bar = sprintf("%*s", read_bar_size, "")
 			gsub(/ /, "=", read_bar)
@@ -571,12 +573,11 @@ run_bpftrace /dev/stdin <<EOF | awk \
 				json_out = json_add_str(json_out,
 					tolower(view), cred)
 				json_out = json_add_uint(json_out,
-					"total_bytes",
-					write_total + read_total)
+					"total_bytes", cred_read + cred_write)
 				json_out = json_add_uint(json_out,
-					"read_bytes", read_total)
+					"read_bytes", cred_read)
 				json_out = json_add_uint(json_out,
-					"write_bytes", write_total)
+					"write_bytes", cred_write)
 				buffer_add("{" json_out "}\n")
 			} else {
 				buffer_add(sprintf(fmt, cred,
