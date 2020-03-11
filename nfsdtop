@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-10 17:06:04 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-10 17:07:53 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 1.0-beta-4 $'
+VERSION='$Version: 1.0-beta-5 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -513,9 +513,9 @@ run_bpftrace /dev/stdin <<EOF | awk \
 			json_out = json_add_uint(json_out,
 				"total_bytes", write_total + read_total)
 			json_out = json_add_uint(json_out,
-				"write_bytes", write_total)
-			json_out = json_add_uint(json_out,
 				"read_bytes", read_total)
+			json_out = json_add_uint(json_out,
+				"write_bytes", write_total)
 			buffer_add("{" json_out "}\n")
 		} else {
 			buffer_add(sprintf(fmt, "total",
@@ -574,9 +574,9 @@ run_bpftrace /dev/stdin <<EOF | awk \
 					"total_bytes",
 					write_total + read_total)
 				json_out = json_add_uint(json_out,
-					"write_bytes", write_total)
-				json_out = json_add_uint(json_out,
 					"read_bytes", read_total)
+				json_out = json_add_uint(json_out,
+					"write_bytes", write_total)
 				buffer_add("{" json_out "}\n")
 			} else {
 				buffer_add(sprintf(fmt, cred,
