@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-10 14:52:09 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-10 17:01:26 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 0.9 $'
+VERSION='$Version: 1.0-beta-1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -92,6 +92,7 @@ usage()
 		"Set interval seconds. Default $DEFAULT_INTERVAL."
 	printf "$optfmt" "" "Accepts decimal point on seconds."
 	printf "$optfmt" "-j" "Output JSON formatted data."
+	printf "$optfmt" "-n" "Do not attempt to map uid/gid to names."
 	printf "$optfmt" "-P file" "Group map file. Default \`$GROUP_MAP'."
 	printf "$optfmt" "-p file" "User map file. Default \`$PASSWD_MAP'."
 	printf "$optfmt" "-r" "Raw view. Do not format output of bpftrace."
