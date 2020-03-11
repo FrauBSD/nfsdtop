@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 0.9
+Version: 1.0
 Release: 1
 Buildarch: noarch
 
@@ -75,6 +75,15 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Fri Mar 10 2020 Devin Teske <dteske@fraubsd.org> 1.0-1
+- d755374 Add -N num to limit samples performed
+- 38c0993 Reset bar sizes in case of no activity
+- 0b3b417 Fix bad user stats in JSON output
+- 8499791 Move write stats after read stats in JSON output
+- a8b484a Additional error-checking for -i arg less than 0.001
+- 7d5a2e4 Show usage statement when -i has no arg
+- dc211e0 Comments NFC
+- 9714044 Add -n to usage statement
 * Fri Mar 10 2020 Devin Teske <dteske@fraubsd.org> 0.9-1
 - 6ffc12e Add -s to view stats by server IP
 - 23c954d Use die to terminate usage() NFC
