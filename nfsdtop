@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-12 12:03:16 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-12 12:04:26 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.2-beta-3 $'
+VERSION='$Version: 2.2 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -800,8 +800,15 @@ BEGIN {
 
 kprobe:nfsd_read
 {
-	@nfsd_read_rqstp[tid] = (struct svc_rqst *)arg0;
+	\$rqstp = (struct svc_rqst *)arg0;
+	@nfsd_read_rqstp[tid] = \$rqstp;
 	@nfsd_read_countp[tid] = arg5;
+	\$data = (int64 *)\$rqstp->rq_addr.__data;
+	\$num = (int64)*\$data;
+	@nfsd_read_client[tid] = \$num >> 16 & 0xFFFFFFFF;
+	\$data = (int64 *)\$rqstp->rq_daddr.__data;
+	\$num = (int64)*\$data;
+	@nfsd_read_server[tid] = \$num >> 16 & 0xFFFFFFFF;
 }
 
 ${VIEW_FILE:+"
@@ -821,24 +828,22 @@ kretprobe:nfsd_read
 	\$countp = @nfsd_read_countp[tid];
 	\$bytes = *\$countp;
 
-	\$client_data = (int64 *)\$rqstp->rq_addr.__data;
-	\$client_num = (int64)*\$client_data;
-	\$client_ip4 = \$client_num >> 16 & 0xFFFFFFFF;
+	\$client_ip4 = @nfsd_read_client[tid];
 	\$client_ip4num = (uint32)(\$client_ip4 >> 24 |
 		(\$client_ip4 >> 16 & 0xFF) << 8 |
 		(\$client_ip4 >> 8 & 0xFF) << 16 |
 		(\$client_ip4 & 0xFF) << 24);
 
-	\$server_data = (int64 *)\$rqstp->rq_daddr.__data;
-	\$server_num = (int64)*\$server_data;
-	\$server_ip4 = \$server_num >> 16 & 0xFFFFFFFF;
+	\$server_ip4 = @nfsd_read_server[tid];
 	\$server_ip4num = (uint32)(\$server_ip4 >> 24 |
 		(\$server_ip4 >> 16 & 0xFF) << 8 |
 		(\$server_ip4 >> 8 & 0xFF) << 16 |
 		(\$server_ip4 & 0xFF) << 24);
 
+	delete(@nfsd_read_client[tid]);
 	delete(@nfsd_read_countp[tid]);
 	delete(@nfsd_read_rqstp[tid]);
+	delete(@nfsd_read_server[tid]);
 
 	\$filtered = 0;
 
@@ -893,8 +898,15 @@ ${VIEW_FILE:+
 
 kprobe:nfsd_write
 {
-	@nfsd_write_rqstp[tid] = (struct svc_rqst *)arg0;
+	\$rqstp = (struct svc_rqst *)arg0;
+	@nfsd_write_rqstp[tid] = \$rqstp;
 	@nfsd_write_countp[tid] = arg5;
+	\$data = (int64 *)\$rqstp->rq_addr.__data;
+	\$num = (int64)*\$data;
+	@nfsd_write_client[tid] = \$num >> 16 & 0xFFFFFFFF;
+	\$data = (int64 *)\$rqstp->rq_daddr.__data;
+	\$num = (int64)*\$data;
+	@nfsd_write_server[tid] = \$num >> 16 & 0xFFFFFFFF;
 }
 
 ${VIEW_FILE:+"
@@ -914,24 +926,22 @@ kretprobe:nfsd_write
 	\$countp = @nfsd_write_countp[tid];
 	\$bytes = *\$countp;
 
-	\$client_data = (int64 *)\$rqstp->rq_addr.__data;
-	\$client_num = (int64)*\$client_data;
-	\$client_ip4 = \$client_num >> 16 & 0xFFFFFFFF;
+	\$client_ip4 = @nfsd_write_client[tid];
 	\$client_ip4num = (uint32)(\$client_ip4 >> 24 |
 		(\$client_ip4 >> 16 & 0xFF) << 8 |
 		(\$client_ip4 >> 8 & 0xFF) << 16 |
 		(\$client_ip4 & 0xFF) << 24);
 
-	\$server_data = (int64 *)\$rqstp->rq_daddr.__data;
-	\$server_num = (int64)*\$server_data;
-	\$server_ip4 = \$server_num >> 16 & 0xFFFFFFFF;
+	\$server_ip4 = @nfsd_write_server[tid];
 	\$server_ip4num = (uint32)(\$server_ip4 >> 24 |
 		(\$server_ip4 >> 16 & 0xFF) << 8 |
 		(\$server_ip4 >> 8 & 0xFF) << 16 |
 		(\$server_ip4 & 0xFF) << 24);
 
+	delete(@nfsd_write_client[tid]);
 	delete(@nfsd_write_countp[tid]);
 	delete(@nfsd_write_rqstp[tid]);
+	delete(@nfsd_write_server[tid]);
 
 	\$filtered = 0;
 
@@ -1049,10 +1059,14 @@ ${VIEW_SERVER:+
 	clear(@wr_server);
 }
 
+	clear(@nfsd_read_client);
 	clear(@nfsd_read_countp);
 	clear(@nfsd_read_rqstp);
+	clear(@nfsd_read_server);
+	clear(@nfsd_write_client);
 	clear(@nfsd_write_countp);
 	clear(@nfsd_write_rqstp);
+	clear(@nfsd_write_server);
 }
 
 //////////////////////////////////////////////////////////////////////
