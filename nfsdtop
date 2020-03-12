@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 22:59:20 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 23:05:31 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.0-beta-2 $'
+VERSION='$Version: 2.0-beta-3 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -690,7 +690,7 @@ ${VIEW_FILE:+"
 kprobe:nfsd_init_raparms
 /@nfsd_read_rqstp[tid] != 0/
 {
-	@nfsd_read_file[tid] = (struct file *)arg0;
+	@nfsd_read_filep[tid] = (struct file *)arg0;
 }
 "}
 
@@ -728,13 +728,13 @@ $( if [ "$VIEW_CLIENT" ]; then cat <<VIEW
 		}
 VIEW
 elif [ "$VIEW_FILE" ]; then cat <<VIEW
-		\$file = @nfsd_read_file[tid];
+		\$file = @nfsd_read_filep[tid];
 		\$de = \$file->f_dentry;
 		\$n1 = \$de->d_name.name;
 		\$de = \$de->d_parent;
 		\$n2 = \$de->d_name.name;
 
-		delete(@nfsd_read_file[tid]);
+		delete(@nfsd_read_filep[tid]);
 
 		@nfsd_read[str(\$n2), str(\$n1)] = sum(\$bytes);
 VIEW
@@ -767,7 +767,7 @@ ${VIEW_FILE:+"
 kprobe:nfsd_vfs_write
 /@nfsd_write_rqstp[tid] != 0/
 {
-	@nfsd_write_file[tid] = (struct file *)arg2;
+	@nfsd_write_filep[tid] = (struct file *)arg2;
 }
 "}
 
@@ -805,13 +805,13 @@ $( if [ "$VIEW_CLIENT" ]; then cat <<VIEW
 		}
 VIEW
 elif [ "$VIEW_FILE" ]; then cat <<VIEW
-		\$file = @nfsd_write_file[tid];
+		\$file = @nfsd_write_filep[tid];
 		\$de = \$file->f_dentry;
 		\$n1 = \$de->d_name.name;
 		\$de = \$de->d_parent;
 		\$n2 = \$de->d_name.name;
 
-		delete(@nfsd_write_file[tid]);
+		delete(@nfsd_write_filep[tid]);
 
 		@nfsd_write[str(\$n2), str(\$n1)] = sum(\$bytes);
 VIEW
@@ -853,13 +853,13 @@ END
 	// Clear read
 	clear(@nfsd_read);
 	clear(@nfsd_read_countp);${VIEW_FILE:+
-	clear(@nfsd_read_file);}
+	clear(@nfsd_read_filep);}
 	clear(@nfsd_read_rqstp);
 
 	// Clear write
 	clear(@nfsd_write);
 	clear(@nfsd_write_countp);${VIEW_FILE:+
-	clear(@nfsd_write_file);}
+	clear(@nfsd_write_filep);}
 	clear(@nfsd_write_rqstp);
 }
 
