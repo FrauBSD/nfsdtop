@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 22:53:01 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 22:57:58 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.0-alpha-9 $'
+VERSION='$Version: 2.0-beta-1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -412,7 +412,7 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	function parse_map()
 	{
 		if (!match($0, /^@[^\[]*\[/)) return 0
-		map = substr($0, RSTART + 1, RLENGTH - 2)
+		map_name = substr($0, RSTART + 1, RLENGTH - 2)
 		if (view_client || view_server) {
 			match($0, /\[.*\]:/)
 			ip = substr($0, RSTART + 1, RLENGTH - 3)
@@ -427,7 +427,7 @@ run_bpftrace /dev/stdin <<EOF | awk \
 			match($0, / [0-9]+\]/)
 			gid = int(substr($0, RSTART + 1, RLENGTH - 2))
 		}
-		value = $NF
+		map_value = $NF
 		return 1
 	}
 
@@ -529,12 +529,12 @@ run_bpftrace /dev/stdin <<EOF | awk \
 			cred = uid
 		}
 		creds[cred]
-		if (map == "nfsd_read") {
-			read[cred] += value
-			read_write[cred] += value
-		} else if (map == "nfsd_write") {
-			write[cred] += value
-			read_write[cred] += value
+		if (map_name == "nfsd_read") {
+			read[cred] += map_value
+			read_write[cred] += map_value
+		} else if (map_name == "nfsd_write") {
+			write[cred] += map_value
+			read_write[cred] += map_value
 		}
 	}
 
