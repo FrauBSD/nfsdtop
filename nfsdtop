@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 22:00:26 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 22:44:43 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.0-alpha-5 $'
+VERSION='$Version: 2.0-alpha-6 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -648,7 +648,6 @@ run_bpftrace /dev/stdin <<EOF | awk \
 			system(sprintf("kill %d > /dev/null 2>&1", bpid))
 			exit
 		}
-		next
 	}
 
 	############################################################
