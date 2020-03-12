@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 22:44:43 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 22:48:23 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.0-alpha-6 $'
+VERSION='$Version: 2.0-alpha-7 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -486,10 +486,22 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		return json_add_prec(json, key, 12, value)
 	}
 
+	function sample_check()
+	{
+		if (nsamples > 0 && --samples_left < 1) {
+			system(sprintf("kill %d > /dev/null 2>&1", bpid))
+			exit
+		}
+	}
+
 	######################################## MAIN
 
 	raw_view {
 		print
+
+		# Exit if no more samples desired
+		if (/^---$/) sample_check()
+
 		next
 	}
 
@@ -644,10 +656,7 @@ run_bpftrace /dev/stdin <<EOF | awk \
 
 		print_buffer()
 		clear_data()
-		if (nsamples > 0 && --samples_left < 1) {
-			system(sprintf("kill %d > /dev/null 2>&1", bpid))
-			exit
-		}
+		sample_check() # Exit if no more samples desired
 	}
 
 	############################################################
