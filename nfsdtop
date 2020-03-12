@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-12 10:38:55 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-12 10:40:54 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.1-beta-3 $'
+VERSION='$Version: 2.1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -31,8 +31,10 @@ FAILURE=1
 # Command-line options
 #
 DEBUG=					# -d
+FILTER_CLIENT=				# -C ip
 FILTER_FILE=				# -F regex
 FILTER_GROUP=				# -G group
+FILTER_SERVER=				# -S ip
 FILTER_USER=				# -U user
 GROUP_MAP="$DEFAULT_GROUP_MAP"		# -P file
 INTERVAL=$DEFAULT_INTERVAL		# -i sec
@@ -82,6 +84,7 @@ usage()
 
 	printf "Usage: %s [OPTIONS]\n" "$pgm"
 	printf "Options:\n"
+	printf "$optfmt" "-C ip" "Client filter (IPv4 only)."
 	printf "$optfmt" "-c" "View read/write activity by client IP."
 	printf "$optfmt" "-d" "Debug. Print bpftrace script and exit."
 	printf "$optfmt" "-F regex" "File filter. Implies \`-f'."
@@ -100,6 +103,7 @@ usage()
 	printf "$optfmt" "-P file" "Group map file. Default \`$GROUP_MAP'."
 	printf "$optfmt" "-p file" "User map file. Default \`$PASSWD_MAP'."
 	printf "$optfmt" "-r" "Raw view. Do not format output of bpftrace."
+	printf "$optfmt" "-S ip" "Server filtter (IPv4 only)."
 	printf "$optfmt" "-s" "View read/write activity by server IP."
 	printf "$optfmt" "-U group" "User filter (name or id)."
 	printf "$optfmt" "-u" "View read/write activity by user (default)."
@@ -118,13 +122,56 @@ run_bpftrace()
 	fi
 }
 
+isint()
+{
+	local arg="${1#-}"
+	[ "${arg:-x}" = "${arg%[!0-9]*}" ]
+}
+
+isip()
+{
+        local IFS=. noctets=0 octet
+        for octet in $1; do
+                [ "$octet" ] || return 2
+                isint "$octet" || return 3
+                [ $octet -ge 0 ] || return 4
+                [ $octet -gt 255 ] && return 5
+                noctets=$(( $noctets + 1 ))
+        done
+        [ $noctets -eq 4 ]
+}
+
+checkip()
+{
+	isip "$1"
+	case $? in
+	1) die "-C argument \`%s' too many dots" "$1" ;;
+	2) die "-C argument \`%s' missing octet" "$1" ;;
+	3) die "-C argument \`%s' bad octet" "$1" ;;
+	4) die "-C argument \`%s' negative octet" "$1" ;;
+	5) die "-C argument \`%s' too big octet" "$1" ;;
+	esac
+}
+
+atoi()
+{
+	local __addr="$1" __var_to_set="$2" __num=0
+	if isip "$__addr"; then
+		local IFS=.
+		set -- $__addr
+		__num=$(( ($1 << 24) + ($2 << 16) + ($3 << 8) + $4 ))
+	fi
+	eval $__var_to_set=$__num
+}
+
 ############################################################ MAIN
 
 #
 # Parse command-line options
 #
-while getopts cdF:fG:ghi:JjN:nP:p:rsU:uvw flag; do
+while getopts C:cdF:fG:ghi:JjN:nP:p:rS:sU:uvw flag; do
 	case "$flag" in
+	C) FILTER_CLIENT="$OPTARG" ;;
 	c) VIEW=CLIENT VIEW_CLIENT=1 ;;
 	d) DEBUG=1 RAW_VIEW=1 ;;
 	F) VIEW=FILE VIEW_FILE=1 WIDE_VIEW=1 FILTER_FILE="$OPTARG" ;;
@@ -141,6 +188,7 @@ while getopts cdF:fG:ghi:JjN:nP:p:rsU:uvw flag; do
 	P) GROUP_MAP="$OPTARG" ;;
 	p) PASSWD_MAP="$OPTARG" ;;
 	r) RAW_VIEW=1 ;;
+	S) FILTER_SERVER="$OPTARG" ;;
 	s) VIEW=SERVER VIEW_SERVER=1 ;;
 	U) FILTER_USER="$OPTARG" ;;
 	u) VIEW=USER VIEW_USER=1 ;;
@@ -209,6 +257,17 @@ case "$NSAMPLES" in
 esac
 
 #
+# Process `-C ip' option
+#
+case "$FILTER_CLIENT" in
+"") : ok ;;
+*)
+	checkip "$FILTER_CLIENT" # NOTREACHED if non-ip
+	atoi $FILTER_CLIENT FILTER_CLIENT
+	;;
+esac
+
+#
 # Process `-G group' option
 #
 case "$FILTER_GROUP" in
@@ -240,6 +299,17 @@ case "$FILTER_GROUP" in
 		exit 1
 	}' 2> /dev/null ) || die "Unknown group %s" "$FILTER_GROUP"
 	FILTER_GROUP="$_FILTER_GROUP"
+	;;
+esac
+
+#
+# Process `-S ip' option
+#
+case "$FILTER_SERVER" in
+"") : ok ;;
+*)
+	checkip "$FILTER_SERVER" # NOTREACHED if non-ip
+	atoi $FILTER_SERVER FILTER_SERVER
 	;;
 esac
 
@@ -751,13 +821,35 @@ kretprobe:nfsd_read
 	\$countp = @nfsd_read_countp[tid];
 	\$bytes = *\$countp;
 
+	\$client_data = (int64 *)\$rqstp->rq_addr.__data;
+	\$client_num = (int64)*\$client_data;
+	\$client_ip4 = \$client_num >> 16 & 0xFFFFFFFF;
+	\$client_ip4num = (uint32)(\$client_ip4 >> 24 |
+		(\$client_ip4 >> 16 & 0xFF) << 8 |
+		(\$client_ip4 >> 8 & 0xFF) << 16 |
+		(\$client_ip4 & 0xFF) << 24);
+
+	\$server_data = (int64 *)\$rqstp->rq_daddr.__data;
+	\$server_num = (int64)*\$server_data;
+	\$server_ip4 = \$server_num >> 16 & 0xFFFFFFFF;
+	\$server_ip4num = (uint32)(\$server_ip4 >> 24 |
+		(\$server_ip4 >> 16 & 0xFF) << 8 |
+		(\$server_ip4 >> 8 & 0xFF) << 16 |
+		(\$server_ip4 & 0xFF) << 24);
+
 	delete(@nfsd_read_countp[tid]);
 	delete(@nfsd_read_rqstp[tid]);
 
 	\$filtered = 0;
 
+${FILTER_CLIENT:+"
+	if (\$client_ip4num != $FILTER_CLIENT) { \$filtered = 1; }
+"}
 ${FILTER_GROUP:+"
 	if (\$gid != $FILTER_GROUP) { \$filtered = 1; }
+"}
+${FILTER_SERVER:+"
+	if (\$server_ip4num != $FILTER_SERVER) { \$filtered = 1; }
 "}
 ${FILTER_USER:+"
 	if (\$uid != $FILTER_USER) { \$filtered = 1; }
@@ -767,11 +859,7 @@ ${FILTER_USER:+"
 	{
 ${VIEW_CLIENT:+"
 		if (\$rqstp->rq_addr.ss_family == AF_INET) {
-			\$data = (int64 *)\$rqstp->rq_addr.__data;
-			\$num = (int64)*\$data;
-			\$ip4 = \$num >> 16 & 0xFFFFFFFF;
-			\$client = ntop(AF_INET, \$ip4);
-
+			\$client = ntop(AF_INET, \$client_ip4);
 			@rd_client[\$client] = sum(\$bytes);
 		}
 "}
@@ -794,11 +882,7 @@ ${VIEW_GROUP:+"
 
 ${VIEW_SERVER:+"
 		if (\$rqstp->rq_daddr.ss_family == AF_INET) {
-			\$data = (int64 *)\$rqstp->rq_daddr.__data;
-			\$num = (int64)*\$data;
-			\$ip4 = \$num >> 16 & 0xFFFFFFFF;
-			\$server = ntop(AF_INET, \$ip4);
-
+			\$server = ntop(AF_INET, \$server_ip4);
 			@rd_server[\$server] = sum(\$bytes);
 		}
 "}
@@ -834,13 +918,35 @@ kretprobe:nfsd_write
 	\$countp = @nfsd_write_countp[tid];
 	\$bytes = *\$countp;
 
+	\$client_data = (int64 *)\$rqstp->rq_addr.__data;
+	\$client_num = (int64)*\$client_data;
+	\$client_ip4 = \$client_num >> 16 & 0xFFFFFFFF;
+	\$client_ip4num = (uint32)(\$client_ip4 >> 24 |
+		(\$client_ip4 >> 16 & 0xFF) << 8 |
+		(\$client_ip4 >> 8 & 0xFF) << 16 |
+		(\$client_ip4 & 0xFF) << 24);
+
+	\$server_data = (int64 *)\$rqstp->rq_daddr.__data;
+	\$server_num = (int64)*\$server_data;
+	\$server_ip4 = \$server_num >> 16 & 0xFFFFFFFF;
+	\$server_ip4num = (uint32)(\$server_ip4 >> 24 |
+		(\$server_ip4 >> 16 & 0xFF) << 8 |
+		(\$server_ip4 >> 8 & 0xFF) << 16 |
+		(\$server_ip4 & 0xFF) << 24);
+
 	delete(@nfsd_write_countp[tid]);
 	delete(@nfsd_write_rqstp[tid]);
 
 	\$filtered = 0;
 
+${FILTER_CLIENT:+"
+	if (\$client_ip4num != $FILTER_CLIENT) { \$filtered = 1; }
+"}
 ${FILTER_GROUP:+"
 	if (\$gid != $FILTER_GROUP) { \$filtered = 1; }
+"}
+${FILTER_SERVER:+"
+	if (\$server_ip4num != $FILTER_SERVER) { \$filtered = 1; }
 "}
 ${FILTER_USER:+"
 	if (\$uid != $FILTER_USER) { \$filtered = 1; }
@@ -850,11 +956,7 @@ ${FILTER_USER:+"
 	{
 ${VIEW_CLIENT:+"
 		if (\$rqstp->rq_addr.ss_family == AF_INET) {
-			\$data = (int64 *)\$rqstp->rq_addr.__data;
-			\$num = (int64)*\$data;
-			\$ip4 = \$num >> 16 & 0xFFFFFFFF;
-			\$client = ntop(AF_INET, \$ip4);
-
+			\$client = ntop(AF_INET, \$client_ip4);
 			@wr_client[\$client] = sum(\$bytes);
 		}
 "}
@@ -877,11 +979,7 @@ ${VIEW_GROUP:+"
 
 ${VIEW_SERVER:+"
 		if (\$rqstp->rq_daddr.ss_family == AF_INET) {
-			\$data = (int64 *)\$rqstp->rq_daddr.__data;
-			\$num = (int64)*\$data;
-			\$ip4 = \$num >> 16 & 0xFFFFFFFF;
-			\$server = ntop(AF_INET, \$ip4);
-
+			\$server = ntop(AF_INET, \$server_ip4);
 			@wr_server[\$server] = sum(\$bytes);
 		}
 "}
