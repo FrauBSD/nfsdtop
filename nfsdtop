@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-12 10:34:50 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-12 10:36:06 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.1-beta-1 $'
+VERSION='$Version: 2.1-beta-2 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -756,11 +756,11 @@ kretprobe:nfsd_read
 
 	\$filtered = 0;
 
-${FILTER_USER:+"
-	if (\$uid != $FILTER_USER) { \$filtered = 1; }
-"}
 ${FILTER_GROUP:+"
 	if (\$gid != $FILTER_GROUP) { \$filtered = 1; }
+"}
+${FILTER_USER:+"
+	if (\$uid != $FILTER_USER) { \$filtered = 1; }
 "}
 
 	if (\$filtered == 0)
@@ -839,11 +839,11 @@ kretprobe:nfsd_write
 
 	\$filtered = 0;
 
-${FILTER_USER:+"
-	if (\$uid != $FILTER_USER) { \$filtered = 1; }
-"}
 ${FILTER_GROUP:+"
 	if (\$gid != $FILTER_GROUP) { \$filtered = 1; }
+"}
+${FILTER_USER:+"
+	if (\$uid != $FILTER_USER) { \$filtered = 1; }
 "}
 
 	if (\$filtered == 0)
