@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-12 12:00:43 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-12 12:03:16 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.2-beta-2 $'
+VERSION='$Version: 2.2-beta-3 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -858,8 +858,7 @@ ${FILTER_USER:+"
 	if (\$filtered == 0)
 	{
 ${VIEW_CLIENT:+"
-		\$client = ntop(AF_INET, \$client_ip4);
-		@rd_client[\$client] = sum(\$bytes);
+		@rd_client[ntop(AF_INET, \$client_ip4)] = sum(\$bytes);
 "}
 
 ${VIEW_FILE:+"
@@ -877,8 +876,7 @@ ${VIEW_GROUP:+"
 "}
 
 ${VIEW_SERVER:+"
-		\$server = ntop(AF_INET, \$server_ip4);
-		@rd_server[\$server] = sum(\$bytes);
+		@rd_server[ntop(AF_INET, \$server_ip4)] = sum(\$bytes);
 "}
 
 ${VIEW_USER:+"
@@ -953,8 +951,7 @@ ${FILTER_USER:+"
 	if (\$filtered == 0)
 	{
 ${VIEW_CLIENT:+"
-		\$client = ntop(AF_INET, \$client_ip4);
-		@wr_client[\$client] = sum(\$bytes);
+		@wr_client[ntop(AF_INET, \$client_ip4)] = sum(\$bytes);
 "}
 
 ${VIEW_FILE:+"
@@ -972,8 +969,7 @@ ${VIEW_GROUP:+"
 "}
 
 ${VIEW_SERVER:+"
-		\$server = ntop(AF_INET, \$server_ip4);
-		@wr_server[\$server] = sum(\$bytes);
+		@wr_server[ntop(AF_INET, \$server_ip4)] = sum(\$bytes);
 "}
 
 ${VIEW_USER:+"
