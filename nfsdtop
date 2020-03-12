@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 23:33:04 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 23:35:11 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.0-beta-7 $'
+VERSION='$Version: 2.0-beta-8 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -496,7 +496,7 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		}
 	}
 
-	function process_view(
+	function process_view(curview,
 		cred_read, read_bar, read_bar_pct, read_rate, read_total,
 		cred_write, write_bar, write_bar_pct, write_rate, write_total,
 		i, n, r, value, table_rows, cred)
@@ -591,9 +591,8 @@ run_bpftrace /dev/stdin <<EOF | awk \
 				json_out = ""
 				json_out = json_add_uint(json_out, "time", tm)
 				json_out = json_add_str(json_out,
-					"ident", tolower(view))
-				json_out = json_add_str(json_out,
-					tolower(view), cred)
+					"ident", curview)
+				json_out = json_add_str(json_out, curview, cred)
 				json_out = json_add_uint(json_out,
 					"total_bytes", cred_read + cred_write)
 				json_out = json_add_uint(json_out,
@@ -666,7 +665,7 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		#
 		# Process requested view
 		#
-		process_view()
+		process_view(tolower(view))
 
 		#
 		# Dump information
