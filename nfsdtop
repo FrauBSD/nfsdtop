@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 22:52:00 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 22:53:01 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.0-alpha-8 $'
+VERSION='$Version: 2.0-alpha-9 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -383,7 +383,7 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		buffer_add(sprintf("Interval: %-*s %31s\n",
 			fmtsz - 9 - 2 - 31,
 			sprintf("%.3f", interval) "s",
-			strftime("%c",systime())))
+			strftime("%c", systime())))
 				#  9 = "Interval:"
 				#  2 = number of spaces
 				# 31 = %31s = date
