@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-12 14:07:15 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-12 14:08:32 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -15,9 +15,14 @@ DEFAULT_INTERVAL=2 # seconds
 DEFAULT_PASSWD_MAP=.nfsd.passwd
 DEFAULT_GROUP_MAP=.nfsd.group
 
+#
+# Network IP map file
+#
+DEFAULT_IP_MAP=.nfsd.hosts
+
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.3-beta-2 $'
+VERSION='$Version: 2.3 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -38,6 +43,7 @@ FILTER_SERVER=				# -S ip
 FILTER_USER=				# -U user
 GROUP_MAP="$DEFAULT_GROUP_MAP"		# -P file
 INTERVAL=$DEFAULT_INTERVAL		# -i sec
+IP_MAP="$DEFAULT_IP_MAP"		# -I file
 NO_NAMES=				# -n
 NSAMPLES=				# -N num
 OUTPUT_JSON=				# -j
@@ -53,7 +59,9 @@ WIDE_VIEW=				# -w
 #
 # Miscellaneous
 #
+_FILTER_CLIENT=
 _FILTER_GROUP=
+_FILTER_SERVER=
 _FILTER_USER=
 INTERVAL_PROBE= # Calculated
 INTERVAL_SECONDS= # Raw value for awk
@@ -93,13 +101,14 @@ usage()
 	printf "$optfmt" "-G group" "Group filter (name or id)."
 	printf "$optfmt" "-g" "View read/write activity by group."
 	printf "$optfmt" "-h" "Print usage statement and exit."
+	printf "$optfmt" "-I file" "IP map file. Default \`$DEFAULT_IP_MAP'."
 	printf "$optfmt" "-i sec" \
 		"Set interval seconds. Default $DEFAULT_INTERVAL."
 	printf "$optfmt" "" "Accepts decimal point on seconds."
 	printf "$optfmt" "-J" "Output most JSON data. Same as \`-jcgsu'."
 	printf "$optfmt" "-j" "Output JSON formatted data."
 	printf "$optfmt" "-N num" "Perform num samples and exit."
-	printf "$optfmt" "-n" "Do not attempt to map uid/gid to names."
+	printf "$optfmt" "-n" "Do not attempt to map uid/gid/ip to names."
 	printf "$optfmt" "-P file" \
 		"Group map file. Default \`$DEFAULT_GROUP_MAP'."
 	printf "$optfmt" "-p file" \
@@ -263,6 +272,40 @@ esac
 #
 case "$FILTER_CLIENT" in
 "") : ok ;;
+*[a-zA-Z]*)
+	_FILTER_CLIENT=$( awk \
+		-v sq="'" \
+		-v ip_map="$IP_MAP" \
+		-v host="$FILTER_CLIENT" \
+	'BEGIN {
+		delete host2ip
+		while (getline < ip_map > 0) {
+			if (/^[[:space:]]*(#|$)/) continue
+			n = split($0, fields, /[[:space:]]+/)
+			host2ip[fields[2]] = fields[1]
+		}
+		close(ip_map)
+		if (host in host2ip) {
+			print host2ip[host]
+			exit 0
+		} else if (host !~ /\.$/ && (host ".") in host2ip) {
+			print host2ip[host "."]
+			exit 0
+		}
+		gsub(sq, "&\\\\&&", host)
+		cmd = sprintf("host -t A %s%s%s", sq, host, sq)
+		cmd | getline
+		close(cmd)
+		if ($NF !~ /NXDOMAIN/) {
+			print $NF
+			exit 0
+		}
+		exit 1
+	}' 2> /dev/null ) || die "Unknown host %s" "$FILTER_CLIENT"
+	FILTER_CLIENT="$_FILTER_CLIENT"
+	checkip "$FILTER_CLIENT" # NOTREACHED if non-ip
+	atoi $FILTER_CLIENT FILTER_CLIENT
+	;;
 *)
 	checkip "$FILTER_CLIENT" # NOTREACHED if non-ip
 	atoi $FILTER_CLIENT FILTER_CLIENT
@@ -309,6 +352,40 @@ esac
 #
 case "$FILTER_SERVER" in
 "") : ok ;;
+*[a-zA-Z]*)
+	_FILTER_SERVER=$( awk \
+		-v sq="'" \
+		-v ip_map="$IP_MAP" \
+		-v host="$FILTER_SERVER" \
+	'BEGIN {
+		delete host2ip
+		while (getline < ip_map > 0) {
+			if (/^[[:space:]]*(#|$)/) continue
+			n = split($0, fields, /[[:space:]]+/)
+			host2ip[fields[2]] = fields[1]
+		}
+		close(ip_map)
+		if (host in host2ip) {
+			print host2ip[host]
+			exit 0
+		} else if (host !~ /\.$/ && (host ".") in host2ip) {
+			print host2ip[host "."]
+			exit 0
+		}
+		gsub(sq, "&\\\\&&", host)
+		cmd = sprintf("host -t A %s%s%s", sq, host, sq)
+		cmd | getline
+		close(cmd)
+		if ($NF !~ /NXDOMAIN/) {
+			print $NF
+			exit 0
+		}
+		exit 1
+	}' 2> /dev/null ) || die "Unknown host %s" "$FILTER_SERVER"
+	FILTER_SERVER="$_FILTER_SERVER"
+	checkip "$FILTER_SERVER" # NOTREACHED if non-ip
+	atoi $FILTER_SERVER FILTER_SERVER
+	;;
 *)
 	checkip "$FILTER_SERVER" # NOTREACHED if non-ip
 	atoi $FILTER_SERVER FILTER_SERVER
@@ -373,6 +450,7 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	-v cols=$cols \
 	-v group_map="$GROUP_MAP" \
 	-v interval=$INTERVAL_SECONDS \
+	-v ip_map="$IP_MAP" \
 	-v no_names=${NO_NAMES:-0} \
 	-v nsamples=${NSAMPLES:-0} \
 	-v output_json=${OUTPUT_JSON:-0} \
@@ -494,6 +572,14 @@ run_bpftrace /dev/stdin <<EOF | awk \
 			gid2name[fields[3]] = fields[1]
 		}
 		close(group_map)
+
+		delete ip2name
+		while (getline < ip_map > 0) {
+			if (/^[[:space:]]*(#|$)/) continue
+			n = split($0, fields, /[[:space:]]+/)
+			ip2name[fields[1]] = fields[2]
+		}
+		close(ip_map)
 	}
 
 	function load_keys(map_view,        map_key)
@@ -695,9 +781,15 @@ run_bpftrace /dev/stdin <<EOF | awk \
 			sub(/^./, "<", write_bar)
 
 			if (!no_names) {
-				if (curview == "group") {
+				if (curview == "client") {
+					if (cred in ip2name)
+						cred = ip2name[cred]
+				} else if (curview == "group") {
 					if (cred in gid2name)
 						cred = gid2name[cred]
+				} else if (curview == "server") {
+					if (cred in ip2name)
+						cred = ip2name[cred]
 				} else if (curview == "user") {
 					if (cred in uid2name)
 						cred = uid2name[cred]
