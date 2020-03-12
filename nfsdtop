@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 23:09:11 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 23:13:31 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.0-beta-4 $'
+VERSION='$Version: 2.0-beta-5 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -427,7 +427,9 @@ run_bpftrace /dev/stdin <<EOF | awk \
 			match($0, / [0-9]+\]/)
 			gid = int(substr($0, RSTART + 1, RLENGTH - 2))
 		}
+
 		map_value = $NF
+
 		return 1
 	}
 
@@ -655,6 +657,9 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		}
 		if (i > 0) buffer_add(sprintf("(%d more) ... ", i))
 
+		#
+		# Dump information
+		#
 		print_buffer()
 		clear_data()
 		sample_check() # Exit if no more samples desired
@@ -727,6 +732,7 @@ $( if [ "$VIEW_CLIENT" ]; then cat <<VIEW
 			@nfsd_read[\$client] = sum(\$bytes);
 		}
 VIEW
+
 elif [ "$VIEW_FILE" ]; then cat <<VIEW
 		\$file = @nfsd_read_filep[tid];
 		\$de = \$file->f_dentry;
@@ -738,6 +744,7 @@ elif [ "$VIEW_FILE" ]; then cat <<VIEW
 
 		@nfsd_read[str(\$n2), str(\$n1)] = sum(\$bytes);
 VIEW
+
 elif [ "$VIEW_SERVER" ]; then cat <<VIEW
 		if (\$rqstp->rq_daddr.ss_family == AF_INET) {
 			\$data = (int64 *)\$rqstp->rq_daddr.__data;
@@ -748,6 +755,7 @@ elif [ "$VIEW_SERVER" ]; then cat <<VIEW
 			@nfsd_read[\$server] = sum(\$bytes);
 		}
 VIEW
+
 else cat <<VIEW
 		@nfsd_read[\$uid, \$gid] = sum(\$bytes);
 VIEW
@@ -804,6 +812,7 @@ $( if [ "$VIEW_CLIENT" ]; then cat <<VIEW
 			@nfsd_write[\$client] = sum(\$bytes);
 		}
 VIEW
+
 elif [ "$VIEW_FILE" ]; then cat <<VIEW
 		\$file = @nfsd_write_filep[tid];
 		\$de = \$file->f_dentry;
@@ -815,6 +824,7 @@ elif [ "$VIEW_FILE" ]; then cat <<VIEW
 
 		@nfsd_write[str(\$n2), str(\$n1)] = sum(\$bytes);
 VIEW
+
 elif [ "$VIEW_SERVER" ]; then cat <<VIEW
 		if (\$rqstp->rq_daddr.ss_family == AF_INET) {
 			\$data = (int64 *)\$rqstp->rq_daddr.__data;
@@ -825,6 +835,7 @@ elif [ "$VIEW_SERVER" ]; then cat <<VIEW
 			@nfsd_write[\$server] = sum(\$bytes);
 		}
 VIEW
+
 else cat <<VIEW
 		@nfsd_write[\$uid, \$gid] = sum(\$bytes);
 VIEW
