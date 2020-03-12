@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 2.2
+Version: 2.3
 Release: 1
 Buildarch: noarch
 
@@ -75,6 +75,11 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Thu Mar 12 2020 Devin Teske <dteske@fraubsd.org> 2.3-1
+- 8e68d70 Add support for mapping IP<->Host and vice-versa
+- bd3868c Perform tail-based truncation only for file view
+- 8eaf4bb Fix NFC typo
+- aae4667 Fix -h to not be affected by -P/-p
 * Thu Mar 12 2020 Devin Teske <dteske@fraubsd.org> 2.2-1
 - 47be8d5 Reduce probe stack sizes
 - 12a78d3 Remove unnecessary variables
