@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-12 12:04:26 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-12 14:01:57 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.2 $'
+VERSION='$Version: 2.3-alpha-1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -100,8 +100,10 @@ usage()
 	printf "$optfmt" "-j" "Output JSON formatted data."
 	printf "$optfmt" "-N num" "Perform num samples and exit."
 	printf "$optfmt" "-n" "Do not attempt to map uid/gid to names."
-	printf "$optfmt" "-P file" "Group map file. Default \`$GROUP_MAP'."
-	printf "$optfmt" "-p file" "User map file. Default \`$PASSWD_MAP'."
+	printf "$optfmt" "-P file" \
+		"Group map file. Default \`$DEFAULT_GROUP_MAP'."
+	printf "$optfmt" "-p file" \
+		"User map file. Default \`$DEFAULT_PASSWD_MAP'."
 	printf "$optfmt" "-r" "Raw view. Do not format output of bpftrace."
 	printf "$optfmt" "-S ip" "Server filtter (IPv4 only)."
 	printf "$optfmt" "-s" "View read/write activity by server IP."
