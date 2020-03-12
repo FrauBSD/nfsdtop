@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 23:05:31 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 23:09:11 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.0-beta-3 $'
+VERSION='$Version: 2.0-beta-4 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -850,16 +850,17 @@ $INTERVAL_PROBE
 
 END
 {
-	// Clear read
 	clear(@nfsd_read);
-	clear(@nfsd_read_countp);${VIEW_FILE:+
-	clear(@nfsd_read_filep);}
-	clear(@nfsd_read_rqstp);
-
-	// Clear write
 	clear(@nfsd_write);
-	clear(@nfsd_write_countp);${VIEW_FILE:+
-	clear(@nfsd_write_filep);}
+
+${VIEW_FILE:+
+	clear(@nfsd_read_filep);
+	clear(@nfsd_write_filep);
+}
+
+	clear(@nfsd_read_countp);
+	clear(@nfsd_read_rqstp);
+	clear(@nfsd_write_countp);
 	clear(@nfsd_write_rqstp);
 }
 
