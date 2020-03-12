@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-12 10:40:54 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-12 11:58:32 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.1 $'
+VERSION='$Version: 2.2-beta-1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -813,7 +813,7 @@ kprobe:nfsd_init_raparms
 "}
 
 kretprobe:nfsd_read
-/@nfsd_read_rqstp[tid] != 0 && @nfsd_read_countp[tid] != 0/
+/@nfsd_read_rqstp[tid] != 0/
 {
 	\$rqstp = @nfsd_read_rqstp[tid];
 	\$uid = \$rqstp->rq_cred.cr_uid.val;
@@ -871,8 +871,6 @@ ${VIEW_FILE:+"
 		\$de = \$de->d_parent;
 		\$n2 = \$de->d_name.name;
 
-		delete(@nfsd_read_filep[tid]);
-
 		@rd_file[str(\$n2), str(\$n1)] = sum(\$bytes);
 "}
 
@@ -891,6 +889,10 @@ ${VIEW_USER:+"
 		@rd_user[\$uid] = sum(\$bytes);
 "}
 	}
+
+${VIEW_FILE:+
+	delete(@nfsd_read_filep[tid]);
+}
 }
 
 ////////////////////////////////////////////////// WRITE PROBES
@@ -910,7 +912,7 @@ kprobe:nfsd_vfs_write
 "}
 
 kretprobe:nfsd_write
-/@nfsd_write_rqstp[tid] != 0 && @nfsd_write_countp[tid] != 0/
+/@nfsd_write_rqstp[tid] != 0/
 {
 	\$rqstp = @nfsd_write_rqstp[tid];
 	\$uid = \$rqstp->rq_cred.cr_uid.val;
@@ -968,8 +970,6 @@ ${VIEW_FILE:+"
 		\$de = \$de->d_parent;
 		\$n2 = \$de->d_name.name;
 
-		delete(@nfsd_write_filep[tid]);
-
 		@wr_file[str(\$n2), str(\$n1)] = sum(\$bytes);
 "}
 
@@ -988,6 +988,10 @@ ${VIEW_USER:+"
 		@wr_user[\$uid] = sum(\$bytes);
 "}
 	}
+
+${VIEW_FILE:+
+	delete(@nfsd_write_filep[tid]);
+}
 }
 
 ////////////////////////////////////////////////// INTERVAL PROBE
