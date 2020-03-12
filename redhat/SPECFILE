@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 1.0
+Version: 2.0
 Release: 1
 Buildarch: noarch
 
@@ -75,6 +75,32 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Wed Mar 11 2020 Devin Teske <dteske@fraubsd.org> 2.0-1
+- 89a2390 Multi-view JSON stats, add -J for -jcgsu
+- 2eaa632 Use curview in process_view() instead of globals
+- daf51b7 Comments NFC
+- 78463b5 Move decoration below total generation
+- 776cc1e Variable name
+- 573b423 Add view to total record ident
+- 870caee Add total_rate to JSON output records
+- 8108a15 Pedantic reset
+- 9698577 Pass requested view to process_view()
+- 954014d R/W not W/R
+- 091abe0 Create process_view() function
+- 87d2399 Comments and whitespace NFC
+- 260ecbd Re-group bpftrace END clear() instructions
+- 6d0de5c bpftrace pointer variable names
+- f431fe6 Move variable initialization
+- b17b9b2 Variable names NFC
+- 014649e Whitespace NFC
+- c393892 Calculate awk systime() once per-interval
+- 66a9de8 Fix -N num to work with -r
+- 8169e09 Remove unnecessary next in last awk block
+- 3ee9841 Centralize array destruction to clear_data() function
+- 3d9e2d6 Comments and whitespace NFC
+- f2f6971 Whitespace NFC
+- 005f964 Set view column header in getopts loop
+- 8dca359 Sort awk globals in BEGIN alphabetically NFC
 * Fri Mar 10 2020 Devin Teske <dteske@fraubsd.org> 1.0-1
 - d755374 Add -N num to limit samples performed
 - 38c0993 Reset bar sizes in case of no activity
