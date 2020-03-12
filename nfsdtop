@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 23:13:31 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 23:31:23 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.0-beta-5 $'
+VERSION='$Version: 2.0-beta-6 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -496,53 +496,11 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		}
 	}
 
-	######################################## MAIN
-
-	raw_view {
-		print
-
-		# Exit if no more samples desired
-		if (/^---$/) sample_check()
-
-		next
-	}
-
-	/^===$/ {
-		clear_buffer()
-		buffer_add_header()
-		next
-	}
-
-	sub(/^info\|/, "") {
-		if (!output_json) print
-		next
-	}
-
-	parse_map() {
-		if (view_client || view_server) {
-			cred = ip
-		} else if (view_file) {
-			cred = path
-			if (filter_file != "" && path !~ filter_file)
-				next
-		} else if (view_group) {
-			cred = gid
-		} else { # Default
-			cred = uid
-		}
-		creds[cred]
-		if (map_name == "nfsd_read") {
-			read[cred] += map_value
-			read_write[cred] += map_value
-		} else if (map_name == "nfsd_write") {
-			write[cred] += map_value
-			read_write[cred] += map_value
-		}
-	}
-
-	/^---$/ {
-		tm = systime()
-
+	function process_view(
+		cred_read, read_bar, read_bar_pct, read_rate, read_total,
+		cred_write, write_bar, write_bar_pct, write_rate, write_total,
+		i, n, r, value, table_rows, cred)
+	{
 		# Decorate combined read/write values with cred for sorting
 		for (cred in read_write) {
 			value = read_write[cred]
@@ -656,6 +614,59 @@ run_bpftrace /dev/stdin <<EOF | awk \
 			}
 		}
 		if (i > 0) buffer_add(sprintf("(%d more) ... ", i))
+	}
+
+	######################################## MAIN
+
+	raw_view {
+		print
+
+		# Exit if no more samples desired
+		if (/^---$/) sample_check()
+
+		next
+	}
+
+	/^===$/ {
+		clear_buffer()
+		buffer_add_header()
+		next
+	}
+
+	sub(/^info\|/, "") {
+		if (!output_json) print
+		next
+	}
+
+	parse_map() {
+		if (view_client || view_server) {
+			cred = ip
+		} else if (view_file) {
+			cred = path
+			if (filter_file != "" && path !~ filter_file)
+				next
+		} else if (view_group) {
+			cred = gid
+		} else { # Default
+			cred = uid
+		}
+		creds[cred]
+		if (map_name == "nfsd_read") {
+			read[cred] += map_value
+			read_write[cred] += map_value
+		} else if (map_name == "nfsd_write") {
+			write[cred] += map_value
+			read_write[cred] += map_value
+		}
+	}
+
+	/^---$/ {
+		tm = systime()
+
+		#
+		# Process requested view
+		#
+		process_view()
 
 		#
 		# Dump information
