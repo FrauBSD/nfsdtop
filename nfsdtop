@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 22:57:58 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 22:59:20 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.0-beta-1 $'
+VERSION='$Version: 2.0-beta-2 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -554,9 +554,7 @@ run_bpftrace /dev/stdin <<EOF | awk \
 			write_total += write[cred]
 		}
 		read_rate = read_total / interval
-		read_bar = ""
 		write_rate = write_total / interval
-		write_bar = ""
 
 		if (output_json) {
 			json_out = ""
@@ -574,6 +572,8 @@ run_bpftrace /dev/stdin <<EOF | awk \
 				"write_rate", write_rate)
 			buffer_add("{" json_out "}\n")
 		} else {
+			read_bar = ""
+			write_bar = ""
 			buffer_add(sprintf(fmt, "total",
 				humanize(write_rate + read_rate),
 				humanize(write_rate), bar_size, write_bar,
