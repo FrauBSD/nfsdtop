@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 23:43:15 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 23:45:17 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.0-rc-3 $'
+VERSION='$Version: 2.0-rc-4 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -501,12 +501,6 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		cred_write, write_bar, write_bar_pct, write_rate, write_total,
 		i, n, r, v, table_rows, cred)
 	{
-		# Decorate combined read/write values with cred for sorting
-		for (cred in read_write) {
-			v = read_write[cred]
-			read_write[cred] = sprintf("%99d %s", v, cred)
-		}
-
 		# Calculate and print totals
 		read_total = write_total = 0
 		for (cred in creds) {
@@ -541,6 +535,12 @@ run_bpftrace /dev/stdin <<EOF | awk \
 				humanize(write_rate + read_rate),
 				humanize(write_rate), bar_size, write_bar,
 				bar_size, read_bar, humanize(read_rate)))
+		}
+
+		# Decorate combined read/write values with cred for sorting
+		for (cred in read_write) {
+			v = read_write[cred]
+			read_write[cred] = sprintf("%99d %s", v, cred)
 		}
 
 		#
