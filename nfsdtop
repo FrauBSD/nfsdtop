@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-12 10:36:06 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-12 10:38:55 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.1-beta-2 $'
+VERSION='$Version: 2.1-beta-3 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -548,8 +548,8 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		i, n, r, v, _keys_sorted, table_rows, cred)
 	{
 		read_total = map_view_read[curview]
-		write_total = map_view_write[curview]
 		read_rate = read_total / interval
+		write_total = map_view_write[curview]
 		write_rate = write_total / interval
 
 		if (output_json) {
@@ -602,16 +602,6 @@ run_bpftrace /dev/stdin <<EOF | awk \
 			cred_read = map_key_read[curview, cred]
 			cred_write = map_key_write[curview, cred]
 
-			write_rate = cred_write / interval
-			if (write_total > 0)
-				write_bar_pct = cred_write / write_total
-			else
-				write_bar_pct = 0
-			write_bar_size = bar_size * write_bar_pct
-			write_bar = sprintf("%*s", write_bar_size, "")
-			gsub(/ /, "=", write_bar)
-			sub(/^./, "<", write_bar)
-
 			read_rate = cred_read / interval
 			if (read_total > 0)
 				read_bar_pct = cred_read / read_total
@@ -621,6 +611,16 @@ run_bpftrace /dev/stdin <<EOF | awk \
 			read_bar = sprintf("%*s", read_bar_size, "")
 			gsub(/ /, "=", read_bar)
 			sub(/.$/, ">", read_bar)
+
+			write_rate = cred_write / interval
+			if (write_total > 0)
+				write_bar_pct = cred_write / write_total
+			else
+				write_bar_pct = 0
+			write_bar_size = bar_size * write_bar_pct
+			write_bar = sprintf("%*s", write_bar_size, "")
+			gsub(/ /, "=", write_bar)
+			sub(/^./, "<", write_bar)
 
 			if (!no_names) {
 				if (curview == "group") {
