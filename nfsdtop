@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 21:39:20 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 21:44:45 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.0-alpha-1 $'
+VERSION='$Version: 2.0-alpha-2 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -55,6 +55,7 @@ _FILTER_GROUP=
 _FILTER_USER=
 INTERVAL_PROBE= # Calculated
 INTERVAL_SECONDS= # Raw value for awk
+VIEW=USER # Default
 
 ############################################################ FUNCTIONS
 
@@ -123,14 +124,16 @@ run_bpftrace()
 #
 while getopts cdF:fG:ghi:jN:nP:p:rsU:uvw flag; do
 	case "$flag" in
-	c) VIEW_CLIENT=1 VIEW_FILE= VIEW_GROUP= VIEW_SERVER= VIEW_USER= ;;
+	c) VIEW=CLIENT VIEW_CLIENT=1 \
+		VIEW_FILE= VIEW_GROUP= VIEW_SERVER= VIEW_USER= ;;
 	d) DEBUG=1 RAW_VIEW=1 ;;
-	F) FILTER_FILE="$OPTARG" VIEW_FILE=1 WIDE_VIEW=1 \
+	F) VIEW=FILE VIEW_FILE=1 WIDE_VIEW=1 FILTER_FILE="$OPTARG" \
 		VIEW_CLIENT= VIEW_GROUP= VIEW_SERVER= VIEW_USER= ;;
-	f) VIEW_FILE=1 WIDE_VIEW=1 \
+	f) VIEW=FILE VIEW_FILE=1 WIDE_VIEW=1 \
 		VIEW_CLIENT= VIEW_GROUP= VIEW_SERVER= VIEW_USER= ;;
 	G) FILTER_GROUP="$OPTARG" ;;
-	g) VIEW_GROUP=1 VIEW_CLIENT= VIEW_FILE= VIEW_SERVER= VIEW_USER= ;;
+	g) VIEW=GROUP VIEW_GROUP=1 \
+		VIEW_CLIENT= VIEW_FILE= VIEW_SERVER= VIEW_USER= ;;
 	i) INTERVAL="$OPTARG" ;;
 	j) OUTPUT_JSON=1 ;;
 	N) [ "$OPTARG" ] || usage "-N option requires an argument" # NOTREACHED
@@ -139,9 +142,11 @@ while getopts cdF:fG:ghi:jN:nP:p:rsU:uvw flag; do
 	P) GROUP_MAP="$OPTARG" ;;
 	p) PASSWD_MAP="$OPTARG" ;;
 	r) RAW_VIEW=1 ;;
-	s) VIEW_SERVER=1 VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= VIEW_USER= ;;
+	s) VIEW=SERVER VIEW_SERVER=1 \
+		VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= VIEW_USER= ;;
 	U) FILTER_USER="$OPTARG" ;;
-	u) VIEW_USER=1 VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= VIEW_SERVER= ;;
+	u) VIEW=USER VIEW_USER=1 \
+		VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= VIEW_SERVER= ;;
 	v) VERSION="${VERSION#*: }"
 		echo "${VERSION% $}"
 		exit $SUCCESS ;;
@@ -291,6 +296,7 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	-v passwd_map="$PASSWD_MAP" \
 	-v raw_view=${RAW_VIEW:-0} \
 	-v rows=$rows \
+	-v view="$VIEW" \
 	-v view_client=${VIEW_CLIENT:-0} \
 	-v view_file=${VIEW_FILE:-0} \
 	-v view_group=${VIEW_GROUP:-0} \
@@ -336,19 +342,6 @@ run_bpftrace /dev/stdin <<EOF | awk \
 			# 36 = 3 x %12s
 			#  4 = number of spaces
 			#  1 = "|" between bars
-
-		# Column headers
-		if (view_client) {
-			view = "CLIENT"
-		} else if (view_file) {
-			view = "FILE"
-		} else if (view_group) {
-			view = "GROUP"
-		} else if (view_server) {
-			view = "SERVER"
-		} else { # Default
-			view = "USER"
-		}
 
 		if (!raw_view) {
 			clear_buffer()
