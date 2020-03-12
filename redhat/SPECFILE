@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 2.1
+Version: 2.2
 Release: 1
 Buildarch: noarch
 
@@ -75,7 +75,12 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
-* Thu Mar 12 2020 Devin Teske <dteske@fraubsd.org> 2.0-1
+* Thu Mar 12 2020 Devin Teske <dteske@fraubsd.org> 2.2-1
+- 47be8d5 Reduce probe stack sizes
+- 12a78d3 Remove unnecessary variables
+- 82c2ca3 Treat AF_INET6 as AF_INET (testing)
+- 89778b7 Fix memory leaks
+* Thu Mar 12 2020 Devin Teske <dteske@fraubsd.org> 2.1-1
 - bc49cf8 Add -C ip and -S ip for client/server filtering
 - 618a87b Process read before write (alphabetically)
 - 3c3d997 Process group before user (alphabetically)
