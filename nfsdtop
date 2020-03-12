@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 21:57:10 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 22:00:26 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.0-alpha-4 $'
+VERSION='$Version: 2.0-alpha-5 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -352,13 +352,6 @@ run_bpftrace /dev/stdin <<EOF | awk \
 			}
 			if (!no_names) load_files()
 		}
-
-		# Declare arrays
-		delete creds
-		delete read
-		delete write
-		delete read_write
-		delete read_write_sorted
 	}
 
 	######################################## FUNCTIONS
@@ -366,8 +359,19 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	function buffer_add(text) { BUFFER = BUFFER text }
 	function print_buffer() { printf "%s", BUFFER }
 
+	function clear_data()
+	{
+		delete creds
+		delete read
+		delete write
+		delete read_write
+		delete read_write_sorted
+	}
+
 	function clear_buffer()
 	{
+		clear_data()
+
 		BUFFER = ""
 		if (!output_json)
 			buffer_add(sprintf("\033[H\033[J"))
@@ -638,14 +642,8 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		}
 		if (i > 0) buffer_add(sprintf("(%d more) ... ", i))
 
-		# Clean up
-		delete creds
-		delete read
-		delete write
-		delete read_write
-		delete read_write_sorted
-
 		print_buffer()
+		clear_data()
 		if (nsamples > 0 && --samples_left < 1) {
 			system(sprintf("kill %d > /dev/null 2>&1", bpid))
 			exit
