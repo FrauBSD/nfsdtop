@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 23:51:58 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 23:54:29 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.0-rc-6 $'
+VERSION='$Version: 2.0 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -45,7 +45,7 @@ VIEW_CLIENT=				# -c
 VIEW_FILE=				# -f
 VIEW_GROUP=				# -g
 VIEW_SERVER=				# -s
-VIEW_USER=1				# -u (default)
+VIEW_USER=				# -u (default)
 WIDE_VIEW=				# -w
 
 #
@@ -55,7 +55,7 @@ _FILTER_GROUP=
 _FILTER_USER=
 INTERVAL_PROBE= # Calculated
 INTERVAL_SECONDS= # Raw value for awk
-VIEW=USER # Default
+VIEW=
 
 ############################################################ FUNCTIONS
 
@@ -93,6 +93,7 @@ usage()
 	printf "$optfmt" "-i sec" \
 		"Set interval seconds. Default $DEFAULT_INTERVAL."
 	printf "$optfmt" "" "Accepts decimal point on seconds."
+	printf "$optfmt" "-J" "Output most JSON data. Same as \`-jcgsu'."
 	printf "$optfmt" "-j" "Output JSON formatted data."
 	printf "$optfmt" "-N num" "Perform num samples and exit."
 	printf "$optfmt" "-n" "Do not attempt to map uid/gid to names."
@@ -122,19 +123,17 @@ run_bpftrace()
 #
 # Parse command-line options
 #
-while getopts cdF:fG:ghi:jN:nP:p:rsU:uvw flag; do
+while getopts cdF:fG:ghi:JjN:nP:p:rsU:uvw flag; do
 	case "$flag" in
-	c) VIEW=CLIENT VIEW_CLIENT=1 \
-		VIEW_FILE= VIEW_GROUP= VIEW_SERVER= VIEW_USER= ;;
+	c) VIEW=CLIENT VIEW_CLIENT=1 ;;
 	d) DEBUG=1 RAW_VIEW=1 ;;
-	F) VIEW=FILE VIEW_FILE=1 WIDE_VIEW=1 FILTER_FILE="$OPTARG" \
-		VIEW_CLIENT= VIEW_GROUP= VIEW_SERVER= VIEW_USER= ;;
-	f) VIEW=FILE VIEW_FILE=1 WIDE_VIEW=1 \
-		VIEW_CLIENT= VIEW_GROUP= VIEW_SERVER= VIEW_USER= ;;
+	F) VIEW=FILE VIEW_FILE=1 WIDE_VIEW=1 FILTER_FILE="$OPTARG" ;;
+	f) VIEW=FILE VIEW_FILE=1 WIDE_VIEW=1 ;;
 	G) FILTER_GROUP="$OPTARG" ;;
-	g) VIEW=GROUP VIEW_GROUP=1 \
-		VIEW_CLIENT= VIEW_FILE= VIEW_SERVER= VIEW_USER= ;;
+	g) VIEW=GROUP VIEW_GROUP=1 ;;
 	i) INTERVAL="$OPTARG" ;;
+	J) OUTPUT_JSON=1 \
+		VIEW_CLIENT=1 VIEW_GROUP=1 VIEW_SERVER=1 VIEW_USER=1 ;;
 	j) OUTPUT_JSON=1 ;;
 	N) [ "$OPTARG" ] || usage "-N option requires an argument" # NOTREACHED
 		NSAMPLES="$OPTARG" ;;
@@ -142,11 +141,9 @@ while getopts cdF:fG:ghi:jN:nP:p:rsU:uvw flag; do
 	P) GROUP_MAP="$OPTARG" ;;
 	p) PASSWD_MAP="$OPTARG" ;;
 	r) RAW_VIEW=1 ;;
-	s) VIEW=SERVER VIEW_SERVER=1 \
-		VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= VIEW_USER= ;;
+	s) VIEW=SERVER VIEW_SERVER=1 ;;
 	U) FILTER_USER="$OPTARG" ;;
-	u) VIEW=USER VIEW_USER=1 \
-		VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= VIEW_SERVER= ;;
+	u) VIEW=USER VIEW_USER=1 ;;
 	v) VERSION="${VERSION#*: }"
 		echo "${VERSION% $}"
 		exit $SUCCESS ;;
@@ -160,6 +157,20 @@ shift $(( $OPTIND - 1 ))
 # Check command-line arguments
 #
 [ $# -eq 0 ] || usage "Too many arguments" # NOTREACHED
+
+#
+# Silently ignore previous view options unless JSON output
+#
+[ "$VIEW" ] || VIEW=USER VIEW_USER=1
+if [ ! "$OUTPUT_JSON" ]; then
+	case "$VIEW" in
+	CLIENT) VIEW_FILE= VIEW_GROUP= VIEW_SERVER= VIEW_USER= ;;
+	FILE) VIEW_CLIENT= VIEW_GROUP= VIEW_SERVER= VIEW_USER= ;;
+	GROUP) VIEW_CLIENT= VIEW_FILE= VIEW_SERVER= VIEW_USER= ;;
+	SERVER) VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= VIEW_USER= ;;
+	USER) VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= VIEW_SERVER= ;;
+	esac
+fi
 
 #
 # Validate `-i sec' option
@@ -297,10 +308,6 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	-v raw_view=${RAW_VIEW:-0} \
 	-v rows=$rows \
 	-v view="$VIEW" \
-	-v view_client=${VIEW_CLIENT:-0} \
-	-v view_file=${VIEW_FILE:-0} \
-	-v view_group=${VIEW_GROUP:-0} \
-	-v view_server=${VIEW_SERVER:-0} \
 	-v wide_view=${WIDE_VIEW:-0} \
 	'####################################### BEGIN
 
@@ -360,11 +367,20 @@ run_bpftrace /dev/stdin <<EOF | awk \
 
 	function clear_data()
 	{
-		delete creds
-		delete read
-		delete write
-		delete read_write
-		delete read_write_sorted
+		delete client_keys
+		delete file_keys
+		delete group_keys
+		delete server_keys
+		delete user_keys
+
+		nviews = 0
+		delete map_views
+		delete view_list
+
+		delete map_key_read
+		delete map_key_write
+		delete map_view_read
+		delete map_view_write
 	}
 
 	function clear_buffer()
@@ -408,26 +424,57 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		close(group_map)
 	}
 
+	function load_keys(map_view,        map_key)
+	{
+		delete _keys
+		if (map_view == "client") for (map_key in client_keys)
+			_keys[map_key] = client_keys[map_key]
+		else if (map_view == "file") for (map_key in file_keys)
+			_keys[map_key] = file_keys[map_key]
+		else if (map_view == "group") for (map_key in group_keys)
+			_keys[map_key] = group_keys[map_key]
+		else if (map_view == "server") for (map_key in server_keys)
+			_keys[map_key] = server_keys[map_key]
+		else if (map_view == "user") for (map_key in user_keys)
+			_keys[map_key] = user_keys[map_key]
+	}
+
 	function parse_map()
 	{
 		if (!match($0, /^@[^\[]*\[/)) return 0
 		map_name = substr($0, RSTART + 1, RLENGTH - 2)
-		if (view_client || view_server) {
-			match($0, /\[.*\]:/)
-			ip = substr($0, RSTART + 1, RLENGTH - 3)
-		} else if (view_file) {
-			match($0, /\[.*\]:/)
-			path = substr($0, RSTART + 1, RLENGTH - 3)
-			gsub(/, /, "/", path)
-			gsub("//+", "/", path)
-		} else {
-			match($0, /\[[0-9]+,/)
-			uid = int(substr($0, RSTART + 1, RLENGTH - 2))
-			match($0, / [0-9]+\]/)
-			gid = int(substr($0, RSTART + 1, RLENGTH - 2))
+		map_view = substr(map_name, 4)
+		map_op = substr(map_name, 1, 2) # rd/wr
+
+		if (!match($0, /\[.*\]:/)) return 0
+		map_key = substr($0, RSTART + 1, RLENGTH - 3)
+		map_value = $NF
+
+		if (map_view == "user" || map_view == "group") {
+			map_key = int(map_key)
+		} else if (map_view == "file") {
+			if (filter_file != "" && cred !~ filter_file) return 0
+			gsub(/, /, "/", map_key)
+			gsub("//+", "/", map_key)
 		}
 
-		map_value = $NF
+		if (!(map_view in map_views)) {
+			map_views[map_view]
+			view_list[++nviews] = map_view
+		}
+		if (map_view == "client") client_keys[map_key]
+		else if (map_view == "file") file_keys[map_key]
+		else if (map_view == "group") group_keys[map_key]
+		else if (map_view == "server") server_keys[map_key]
+		else if (map_view == "user") user_keys[map_key]
+
+		if (map_op == "rd") {
+			map_view_read[map_view] += map_value
+			map_key_read[map_view, map_key] = map_value
+		} else { # wr
+			map_view_write[map_view] += map_value
+			map_key_write[map_view, map_key] = map_value
+		}
 
 		return 1
 	}
@@ -498,13 +545,10 @@ run_bpftrace /dev/stdin <<EOF | awk \
 	function process_view(curview,
 		cred_read, read_bar, read_bar_pct, read_rate, read_total,
 		cred_write, write_bar, write_bar_pct, write_rate, write_total,
-		i, n, r, v, table_rows, cred)
+		i, n, r, v, _keys_sorted, table_rows, cred)
 	{
-		read_total = write_total = 0
-		for (cred in creds) {
-			read_total += read[cred]
-			write_total += write[cred]
-		}
+		read_total = map_view_read[curview]
+		write_total = map_view_write[curview]
 		read_rate = read_total / interval
 		write_rate = write_total / interval
 
@@ -538,23 +582,25 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		#
 		# Decorate combined read/write values
 		#
-		for (cred in read_write) {
-			v = read_write[cred]
-			read_write[cred] = sprintf("%99d %s", v, cred)
+		load_keys(curview)
+		for (cred in _keys) {
+			v = int(map_key_read[curview, cred]) + \
+				int(map_key_write[curview, cred])
+			_keys[cred] = sprintf("%99d %s", v, cred)
 		}
 
 		#
 		# Print subtotals
 		#
 		r = 1
-		n = _asort(read_write, read_write_sorted)
+		n = _asort(_keys, _keys_sorted)
 		table_rows = output_json ? n : rows - 4
 		for (i = n; i >= 1 && r++ <= table_rows; i--) {
-			cred = read_write_sorted[i]
+			cred = _keys_sorted[i]
 			sub(/^ *[^ ]+ +/, "", cred) # Undecorate
 
-			cred_read = read[cred]
-			cred_write = write[cred]
+			cred_read = map_key_read[curview, cred]
+			cred_write = map_key_write[curview, cred]
 
 			write_rate = cred_write / interval
 			if (write_total > 0)
@@ -643,35 +689,16 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		next
 	}
 
-	parse_map() {
-		if (view_client || view_server) {
-			cred = ip
-		} else if (view_file) {
-			cred = path
-			if (filter_file != "" && path !~ filter_file)
-				next
-		} else if (view_group) {
-			cred = gid
-		} else { # Default
-			cred = uid
-		}
-		creds[cred]
-		if (map_name == "nfsd_read") {
-			read[cred] += map_value
-			read_write[cred] += map_value
-		} else if (map_name == "nfsd_write") {
-			write[cred] += map_value
-			read_write[cred] += map_value
-		}
-	}
+	/^@/ { parse_map() }
 
 	/^---$/ {
 		tm = systime()
 
 		#
-		# Process requested view
+		# Process each requested view
 		#
-		process_view(tolower(view))
+		for (v = 1; v <= nviews; v++)
+			process_view(view_list[v])
 
 		#
 		# Dump information
@@ -738,18 +765,18 @@ ${FILTER_GROUP:+"
 
 	if (\$filtered == 0)
 	{
-$( if [ "$VIEW_CLIENT" ]; then cat <<VIEW
+${VIEW_CLIENT:+"
 		if (\$rqstp->rq_addr.ss_family == AF_INET) {
 			\$data = (int64 *)\$rqstp->rq_addr.__data;
 			\$num = (int64)*\$data;
 			\$ip4 = \$num >> 16 & 0xFFFFFFFF;
 			\$client = ntop(AF_INET, \$ip4);
 
-			@nfsd_read[\$client] = sum(\$bytes);
+			@rd_client[\$client] = sum(\$bytes);
 		}
-VIEW
+"}
 
-elif [ "$VIEW_FILE" ]; then cat <<VIEW
+${VIEW_FILE:+"
 		\$file = @nfsd_read_filep[tid];
 		\$de = \$file->f_dentry;
 		\$n1 = \$de->d_name.name;
@@ -758,24 +785,27 @@ elif [ "$VIEW_FILE" ]; then cat <<VIEW
 
 		delete(@nfsd_read_filep[tid]);
 
-		@nfsd_read[str(\$n2), str(\$n1)] = sum(\$bytes);
-VIEW
+		@rd_file[str(\$n2), str(\$n1)] = sum(\$bytes);
+"}
 
-elif [ "$VIEW_SERVER" ]; then cat <<VIEW
+${VIEW_GROUP:+"
+		@rd_group[\$gid] = sum(\$bytes);
+"}
+
+${VIEW_SERVER:+"
 		if (\$rqstp->rq_daddr.ss_family == AF_INET) {
 			\$data = (int64 *)\$rqstp->rq_daddr.__data;
 			\$num = (int64)*\$data;
 			\$ip4 = \$num >> 16 & 0xFFFFFFFF;
 			\$server = ntop(AF_INET, \$ip4);
 
-			@nfsd_read[\$server] = sum(\$bytes);
+			@rd_server[\$server] = sum(\$bytes);
 		}
-VIEW
+"}
 
-else cat <<VIEW
-		@nfsd_read[\$uid, \$gid] = sum(\$bytes);
-VIEW
-fi )
+${VIEW_USER:+"
+		@rd_user[\$uid] = sum(\$bytes);
+"}
 	}
 }
 
@@ -818,18 +848,18 @@ ${FILTER_GROUP:+"
 
 	if (\$filtered == 0)
 	{
-$( if [ "$VIEW_CLIENT" ]; then cat <<VIEW
+${VIEW_CLIENT:+"
 		if (\$rqstp->rq_addr.ss_family == AF_INET) {
 			\$data = (int64 *)\$rqstp->rq_addr.__data;
 			\$num = (int64)*\$data;
 			\$ip4 = \$num >> 16 & 0xFFFFFFFF;
 			\$client = ntop(AF_INET, \$ip4);
 
-			@nfsd_write[\$client] = sum(\$bytes);
+			@wr_client[\$client] = sum(\$bytes);
 		}
-VIEW
+"}
 
-elif [ "$VIEW_FILE" ]; then cat <<VIEW
+${VIEW_FILE:+"
 		\$file = @nfsd_write_filep[tid];
 		\$de = \$file->f_dentry;
 		\$n1 = \$de->d_name.name;
@@ -838,24 +868,27 @@ elif [ "$VIEW_FILE" ]; then cat <<VIEW
 
 		delete(@nfsd_write_filep[tid]);
 
-		@nfsd_write[str(\$n2), str(\$n1)] = sum(\$bytes);
-VIEW
+		@wr_file[str(\$n2), str(\$n1)] = sum(\$bytes);
+"}
 
-elif [ "$VIEW_SERVER" ]; then cat <<VIEW
+${VIEW_GROUP:+"
+		@wr_group[\$gid] = sum(\$bytes);
+"}
+
+${VIEW_SERVER:+"
 		if (\$rqstp->rq_daddr.ss_family == AF_INET) {
 			\$data = (int64 *)\$rqstp->rq_daddr.__data;
 			\$num = (int64)*\$data;
 			\$ip4 = \$num >> 16 & 0xFFFFFFFF;
 			\$server = ntop(AF_INET, \$ip4);
 
-			@nfsd_write[\$server] = sum(\$bytes);
+			@wr_server[\$server] = sum(\$bytes);
 		}
-VIEW
+"}
 
-else cat <<VIEW
-		@nfsd_write[\$uid, \$gid] = sum(\$bytes);
-VIEW
-fi )
+${VIEW_USER:+"
+		@wr_user[\$uid] = sum(\$bytes);
+"}
 	}
 }
 
@@ -865,10 +898,36 @@ $INTERVAL_PROBE
 {
 	printf("===\n");
 
-	print(@nfsd_read);
-	print(@nfsd_write);
-	clear(@nfsd_read);
-	clear(@nfsd_write);
+${VIEW_CLIENT:+
+	print(@rd_client);
+	print(@wr_client);
+	clear(@rd_client);
+	clear(@wr_client);
+}
+${VIEW_FILE:+
+	print(@rd_file);
+	print(@wr_file);
+	clear(@rd_file);
+	clear(@wr_file);
+}
+${VIEW_GROUP:+
+	print(@rd_group);
+	print(@wr_group);
+	clear(@rd_group);
+	clear(@wr_group);
+}
+${VIEW_SERVER:+
+	print(@rd_server);
+	print(@wr_server);
+	clear(@rd_server);
+	clear(@wr_server);
+}
+${VIEW_USER:+
+	print(@rd_user);
+	print(@wr_user);
+	clear(@rd_user);
+	clear(@wr_user);
+}
 
 	printf("---\n");
 }
@@ -877,12 +936,27 @@ $INTERVAL_PROBE
 
 END
 {
-	clear(@nfsd_read);
-	clear(@nfsd_write);
-
+${VIEW_CLIENT:+
+	clear(@rd_client);
+	clear(@wr_client);
+}
 ${VIEW_FILE:+
 	clear(@nfsd_read_filep);
 	clear(@nfsd_write_filep);
+	clear(@rd_file);
+	clear(@wr_file);
+}
+${VIEW_GROUP:+
+	clear(@rd_group);
+	clear(@wr_group);
+}
+${VIEW_USER:+
+	clear(@rd_user);
+	clear(@wr_user);
+}
+${VIEW_SERVER:+
+	clear(@rd_server);
+	clear(@wr_server);
 }
 
 	clear(@nfsd_read_countp);
