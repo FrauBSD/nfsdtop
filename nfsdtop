@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 21:44:45 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 21:52:02 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.0-alpha-2 $'
+VERSION='$Version: 2.0-alpha-3 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -674,6 +674,7 @@ kprobe:nfsd_read
 	@nfsd_read_rqstp[tid] = (struct svc_rqst *)arg0;
 	@nfsd_read_countp[tid] = arg5;
 }
+
 ${VIEW_FILE:+"
 kprobe:nfsd_init_raparms
 /@nfsd_read_rqstp[tid] != 0/
@@ -681,6 +682,7 @@ kprobe:nfsd_init_raparms
 	@nfsd_read_file[tid] = (struct file *)arg0;
 }
 "}
+
 kretprobe:nfsd_read
 /@nfsd_read_rqstp[tid] != 0 && @nfsd_read_countp[tid] != 0/
 {
@@ -694,12 +696,16 @@ kretprobe:nfsd_read
 	delete(@nfsd_read_rqstp[tid]);
 
 	\$filtered = 0;
-${FILTER_USER:+"
-	if (\$uid != $FILTER_USER) { \$filtered = 1; }"}
-${FILTER_GROUP:+"
-	if (\$gid != $FILTER_GROUP) { \$filtered = 1; }"}
 
-	if (\$filtered == 0) {
+${FILTER_USER:+"
+	if (\$uid != $FILTER_USER) { \$filtered = 1; }
+"}
+${FILTER_GROUP:+"
+	if (\$gid != $FILTER_GROUP) { \$filtered = 1; }
+"}
+
+	if (\$filtered == 0)
+	{
 $( if [ "$VIEW_CLIENT" ]; then cat <<VIEW
 		if (\$rqstp->rq_addr.ss_family == AF_INET) {
 			\$data = (int64 *)\$rqstp->rq_addr.__data;
@@ -745,6 +751,7 @@ kprobe:nfsd_write
 	@nfsd_write_rqstp[tid] = (struct svc_rqst *)arg0;
 	@nfsd_write_countp[tid] = arg5;
 }
+
 ${VIEW_FILE:+"
 kprobe:nfsd_vfs_write
 /@nfsd_write_rqstp[tid] != 0/
@@ -752,6 +759,7 @@ kprobe:nfsd_vfs_write
 	@nfsd_write_file[tid] = (struct file *)arg2;
 }
 "}
+
 kretprobe:nfsd_write
 /@nfsd_write_rqstp[tid] != 0 && @nfsd_write_countp[tid] != 0/
 {
@@ -765,12 +773,16 @@ kretprobe:nfsd_write
 	delete(@nfsd_write_rqstp[tid]);
 
 	\$filtered = 0;
-${FILTER_USER:+"
-	if (\$uid != $FILTER_USER) { \$filtered = 1; }"}
-${FILTER_GROUP:+"
-	if (\$gid != $FILTER_GROUP) { \$filtered = 1; }"}
 
-	if (\$filtered == 0) {
+${FILTER_USER:+"
+	if (\$uid != $FILTER_USER) { \$filtered = 1; }
+"}
+${FILTER_GROUP:+"
+	if (\$gid != $FILTER_GROUP) { \$filtered = 1; }
+"}
+
+	if (\$filtered == 0)
+	{
 $( if [ "$VIEW_CLIENT" ]; then cat <<VIEW
 		if (\$rqstp->rq_addr.ss_family == AF_INET) {
 			\$data = (int64 *)\$rqstp->rq_addr.__data;
