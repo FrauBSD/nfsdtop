@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 2.0
+Version: 2.1
 Release: 1
 Buildarch: noarch
 
@@ -75,6 +75,11 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Thu Mar 12 2020 Devin Teske <dteske@fraubsd.org> 2.0-1
+- bc49cf8 Add -C ip and -S ip for client/server filtering
+- 618a87b Process read before write (alphabetically)
+- 3c3d997 Process group before user (alphabetically)
+- b98c5bb Adjust usage statement for clarity with respect to -F argument
 * Wed Mar 11 2020 Devin Teske <dteske@fraubsd.org> 2.0-1
 - 89a2390 Multi-view JSON stats, add -J for -jcgsu
 - 2eaa632 Use curview in process_view() instead of globals
