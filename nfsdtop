@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 21:52:02 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-03-11 21:57:10 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -17,7 +17,7 @@ DEFAULT_GROUP_MAP=.nfsd.group
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.0-alpha-3 $'
+VERSION='$Version: 2.0-alpha-4 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -539,6 +539,7 @@ run_bpftrace /dev/stdin <<EOF | awk \
 		read_bar = ""
 		write_rate = write_total / interval
 		write_bar = ""
+
 		if (output_json) {
 			json_out = ""
 			json_out = json_add_uint(json_out, "time", systime())
@@ -561,13 +562,16 @@ run_bpftrace /dev/stdin <<EOF | awk \
 				bar_size, read_bar, humanize(read_rate)))
 		}
 
+		#
 		# Sort values, extract cred, and print
+		#
 		r = 1
 		n = _asort(read_write, read_write_sorted)
 		table_rows = output_json ? n : rows - 4
 		for (i = n; i >= 1 && r++ <= table_rows; i--) {
 			cred = read_write_sorted[i]
-			sub(/^ *[^ ]+ +/, "", cred)
+			sub(/^ *[^ ]+ +/, "", cred) # Undecorate
+
 			cred_read = read[cred]
 			cred_write = write[cred]
 
@@ -827,11 +831,8 @@ $INTERVAL_PROBE
 {
 	printf("===\n");
 
-	// Print
 	print(@nfsd_read);
 	print(@nfsd_write);
-
-	// Clear
 	clear(@nfsd_read);
 	clear(@nfsd_write);
 
