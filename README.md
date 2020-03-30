@@ -1,8 +1,8 @@
-[//]: # ($FrauBSD: nfsdtop/README.md 2020-03-04 16:03:01 -0800 freebsdfrau $)
+[//]: # ($FrauBSD: nfsdtop/README.md 2020-03-30 16:25:54 -0700 freebsdfrau $)
 
 # Welcome to [FrauBSD.org/nfsdtop](https://fraubsd.org/nfsdtop)!
 
-Display top I/O by user/group on NFS servers using bpftrace
+Display top I/O on NFS servers using bpftrace
 
 ## Foreword
 
