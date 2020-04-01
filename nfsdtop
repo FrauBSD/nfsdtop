@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-03-12 14:08:32 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-04-01 12:47:34 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -22,7 +22,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.3 $'
+VERSION='$Version: 2.3.1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -116,7 +116,7 @@ usage()
 	printf "$optfmt" "-r" "Raw view. Do not format output of bpftrace."
 	printf "$optfmt" "-S ip" "Server filtter (IPv4 only)."
 	printf "$optfmt" "-s" "View read/write activity by server IP."
-	printf "$optfmt" "-U group" "User filter (name or id)."
+	printf "$optfmt" "-U user" "User filter (name or id)."
 	printf "$optfmt" "-u" "View read/write activity by user (default)."
 	printf "$optfmt" "-v" "Print version and exit."
 	printf "$optfmt" "-w" "Wide view. Maximize width of first column."
@@ -393,7 +393,7 @@ case "$FILTER_SERVER" in
 esac
 
 #
-# Process `-U group' option
+# Process `-U user' option
 #
 case "$FILTER_USER" in
 "") : ok ;;
