@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 2.3.1
+Version: 2.3.2
 Release: 1
 Buildarch: noarch
 
@@ -75,6 +75,8 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Wed Apr  1 2020 Devin Teske <dteske@fraubsd.org> 2.3.2-1
+- 04c122c Update usage() for accuracy
 * Wed Apr  1 2020 Devin Teske <dteske@fraubsd.org> 2.3.1-1
 - 2d554e9 Fix copy/pasta in usage() and comments NFC
 * Thu Mar 12 2020 Devin Teske <dteske@fraubsd.org> 2.3-1
