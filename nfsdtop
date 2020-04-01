@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-04-01 12:47:34 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-04-01 16:57:32 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -22,7 +22,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.3.1 $'
+VERSION='$Version: 2.3.2 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -93,7 +93,7 @@ usage()
 	printf "Usage: %s [OPTIONS]\n" "$pgm"
 	printf "Options:\n"
 	printf "$optfmt" "-C ip" "Client filter (IPv4 only)."
-	printf "$optfmt" "-c" "View read/write activity by client IP."
+	printf "$optfmt" "-c" "View read/write activity by client."
 	printf "$optfmt" "-d" "Debug. Print bpftrace script and exit."
 	printf "$optfmt" "-F regex" "File filter. Implies \`-f'."
 	printf "$optfmt" "-f" \
@@ -115,7 +115,7 @@ usage()
 		"User map file. Default \`$DEFAULT_PASSWD_MAP'."
 	printf "$optfmt" "-r" "Raw view. Do not format output of bpftrace."
 	printf "$optfmt" "-S ip" "Server filtter (IPv4 only)."
-	printf "$optfmt" "-s" "View read/write activity by server IP."
+	printf "$optfmt" "-s" "View read/write activity by server."
 	printf "$optfmt" "-U user" "User filter (name or id)."
 	printf "$optfmt" "-u" "View read/write activity by user (default)."
 	printf "$optfmt" "-v" "Print version and exit."
