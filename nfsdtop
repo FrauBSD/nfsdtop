@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-04-01 16:57:32 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-04-01 17:07:48 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -22,7 +22,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.3.2 $'
+VERSION='$Version: 2.3.3 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -237,7 +237,7 @@ fi
 case "$INTERVAL" in
 "") usage "missing -i argument" ;; # NOTREACHED
 0) die "-i sec must be non-zero" ;;
-*[!0-9.]*|*.*.*|.) die "-i argument must be a number" ;;
+*[!0-9.]*|*.*.*|.) die "-i sec must be a number" ;;
 *.*)
 	INTERVAL_SECONDS=$INTERVAL
 	ms=$( echo "$INTERVAL * 1000" | bc )
@@ -249,7 +249,7 @@ case "$INTERVAL" in
 	# the input was too small to produce timing of at least 1 msec
 	#
 	case "$ms" in
-	""|0) die "-i argument must be at least 0.001" ;;
+	""|0) die "-i sec must be at least 0.001" ;;
 	esac
 
 	INTERVAL_PROBE=interval:ms:$ms
@@ -263,8 +263,8 @@ esac
 # Validate `-N num' option
 #
 case "$NSAMPLES" in
-0) die "-i sec must be non-zero" ;;
-*[!0-9]*) die "-i argument must be a positive integer" ;;
+0) die "-N num must be non-zero" ;;
+*[!0-9]*) die "-N num must be a positive integer" ;;
 esac
 
 #
