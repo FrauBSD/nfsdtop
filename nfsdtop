@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-04-01 17:07:48 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-04 16:58:49 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -22,7 +22,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.3.3 $'
+VERSION='$Version: 2.4 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -85,7 +85,7 @@ usage()
 	local optfmt="\t%-11s %s\n"
 
 	exec >&2
-	if [ "$1" ]; then
+	if [ "$fmt" ]; then
 		shift 1 # fmt
 		printf "%s: $fmt\n" "$pgm" "$@"
 	fi
