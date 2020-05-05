@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 09:18:50 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 09:20:21 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 3.1 $'
+VERSION='$Version: 3.1.1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -488,7 +488,6 @@ fi
 # ST: PRE
 #
 {
-	export FILTER_FILE
 
 	#
 	# Start background bpftrace
@@ -823,6 +822,7 @@ EOF
 
 } | awk -v cols=$cols \
 	-v cons=${CONS:-0} \
+	-v filter_file="$FILTER_FILE" \
 	-v group_map="$GROUP_MAP" \
 	-v interval=$INTERVAL_SECONDS \
 	-v ip_map="$IP_MAP" \
@@ -840,8 +840,6 @@ EOF
 	# ST: POST
 
 	BEGIN {
-		filter_file = ENVIRON["FILTER_FILE"]
-
 		exit_status = 0 # SUCCESS
 		samples_left = nsamples
 
@@ -1061,9 +1059,9 @@ EOF
 		if (map_view == "user" || map_view == "group") {
 			map_key = int(map_key)
 		} else if (map_view == "file") {
-			if (filter_file != "" && cred !~ filter_file) return 0
 			gsub(/, /, "/", map_key)
 			gsub("//+", "/", map_key)
+			if (filter_file != "" && map_key !~ filter_file) return 0
 		}
 
 		#
