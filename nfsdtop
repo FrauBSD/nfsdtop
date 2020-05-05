@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 09:27:54 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 09:29:28 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 3.4 $'
+VERSION='$Version: 3.5 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -74,6 +74,7 @@ NSAMPLES=				# -N num
 OUTPUT_JSON=				# -j
 PASSWD_MAP="$DEFAULT_PASSWD_MAP"	# -p file
 RAW_VIEW=				# -r
+SHOW_BYTES=				# -b
 VIEW_CLIENT=				# -c
 VIEW_FILE=				# -f
 VIEW_GROUP=				# -g
@@ -119,6 +120,7 @@ usage()
 	printf "Usage: %s [OPTIONS]\n" "$pgm"
 	printf "Options:\n"
 	printf "$optfmt" "-a" "Always enable color."
+	printf "$optfmt" "-b" "Show bytes instead of bandwidth."
 	printf "$optfmt" "-C ip" "Client filter (IPv4 only)."
 	printf "$optfmt" "-c" "View read/write activity by client."
 	printf "$optfmt" "-D" "Enable debugger."
@@ -221,9 +223,10 @@ info() { send_user info "$*"; }
 #
 # Process command-line options
 #
-while getopts aC:cDdF:fG:ghi:JjN:nP:p:rS:sU:uvw flag; do
+while getopts abC:cDdF:fG:ghi:JjN:nP:p:rS:sU:uvw flag; do
 	case "$flag" in
 	a) COLOR=1 ;;
+	b) SHOW_BYTES=1 ;;
 	C) FILTER_CLIENT="$OPTARG" ;;
 	c) VIEW=CLIENT VIEW_CLIENT=1 ;;
 	D) DEBUGGER=1 RAW_VIEW=1 ;;
@@ -233,7 +236,7 @@ while getopts aC:cDdF:fG:ghi:JjN:nP:p:rS:sU:uvw flag; do
 	G) FILTER_GROUP="$OPTARG" ;;
 	g) VIEW=GROUP VIEW_GROUP=1 ;;
 	i) INTERVAL="$OPTARG" ;;
-	J) OUTPUT_JSON=1 \
+	J) VIEW=JSON OUTPUT_JSON=1 \
 		VIEW_CLIENT=1 VIEW_GROUP=1 VIEW_SERVER=1 VIEW_USER=1 ;;
 	j) OUTPUT_JSON=1 ;;
 	N) [ "$OPTARG" ] || usage "-N option requires an argument" # NOTREACHED
@@ -259,6 +262,14 @@ shift $(( $OPTIND - 1 ))
 # Process command-line arguments
 #
 [ $# -eq 0 ] || usage "Too many arguments" # NOTREACHED
+
+#
+# Prevent non-functional option combinations
+#
+if [ "$SHOW_BYTES" ]; then
+	[ "$VIEW" != "JSON" ] || die "-b cannot be combined with -J"
+	[ ! "$OUTPUT_JSON" ] || die "-b cannot be combined with -j"
+fi
 
 #
 # Silently ignore previous view options unless JSON output
@@ -840,6 +851,7 @@ EOF
 	-v passwd_map="$PASSWD_MAP" \
 	-v raw_view=${RAW_VIEW:-0} \
 	-v rows=$rows \
+	-v show_bytes=${SHOW_BYTES:-0} \
 	-v stderr=/dev/stderr \
 	-v view="$VIEW" \
 	-v wide_view=${WIDE_VIEW:-0} \
@@ -905,8 +917,8 @@ EOF
 		#
 		# Without -w, make vsz fixed-width and bar_size variable.
 		#
-		dsz = 12
-		vsz_fixed = 15 # VIEW column
+		dsz = show_bytes ? 10 : 12
+		vsz_fixed = show_bytes ? 21 : 15 # VIEW column
 		bar_size_fixed = cols <= 80 ? 11 : 21
 		if (wide_view) {
 			# Fixed-width
@@ -1154,7 +1166,8 @@ EOF
 			value /= 1024
 		}
 		if (v ~ /\./) sub(/\.?0+$/, "", v)
-		value = sprintf("%'"'"'.2f%sB/s", value, suffixes[suffix])
+		value = sprintf("%'"'"'.2f%s%s", value, suffixes[suffix],
+			show_bytes ? "B" : "B/s")
 		return value
 	}
 
@@ -1255,10 +1268,16 @@ EOF
 			json_out = json_add_float(json_out,
 				"write_rate", write_rate)
 			buffer_add("{" json_out "}\n")
+		} else if (show_bytes) {
+			# ST: VIEWS
+			buffer_add(sprintf(fmt, "total",
+				humanize(rw_total),
+				humanize(write_total), bar_size, write_bar,
+				bar_size, read_bar, humanize(read_total)))
 		} else {
 			# ST: VIEWS
 			buffer_add(sprintf(fmt, "total",
-				humanize(write_rate + read_rate),
+				humanize(rw_rate),
 				humanize(write_rate), bar_size, write_bar,
 				bar_size, read_bar, humanize(read_rate)))
 		}
@@ -1369,10 +1388,17 @@ EOF
 			json_out = json_add_float(json_out,
 				"write_rate", write_rate)
 			buffer_add("{" json_out "}\n")
+		} else if (show_bytes) {
+			# ST: VIEWDATA
+			buffer_add(sprintf(fmt, cred,
+				humanize(cred_rw),
+				humanize(cred_write), bar_size,
+				write_bar, bar_size, read_bar,
+				humanize(cred_read)))
 		} else {
 			# ST: VIEWDATA
 			buffer_add(sprintf(fmt, cred,
-				humanize(write_rate + read_rate),
+				humanize(rw_rate),
 				humanize(write_rate), bar_size,
 				write_bar, bar_size, read_bar,
 				humanize(read_rate)))
