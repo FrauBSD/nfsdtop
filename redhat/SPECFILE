@@ -10,7 +10,7 @@ Group: Applications/FrauBSD
 Summary: nfsdtop
 License: BSD
 Version: 4.5
-Release: 1
+Release: 2
 Buildarch: noarch
 
 URL: https://www.fraubsd.org/nfsdtop
@@ -75,6 +75,8 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Tue May  5 2020 Devin Teske <dteske@fraubsd.org> 4.5-2
+- Add bc requirement
 * Tue May  5 2020 Devin Teske <dteske@fraubsd.org> 4.5-1
 - 99bce02 Reduce diff against viotop and fix missing newline
 * Tue May  5 2020 Devin Teske <dteske@fraubsd.org> 4.4-1
