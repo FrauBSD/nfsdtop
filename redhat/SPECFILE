@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 4.1
+Version: 4.1.1
 Release: 1
 Buildarch: noarch
 
@@ -75,6 +75,8 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Tue May  5 2020 Devin Teske <dteske@fraubsd.org> 4.1.1-1
+- 0bf5969 Fix whitespace
 * Tue May  5 2020 Devin Teske <dteske@fraubsd.org> 4.1-1
 - acaa1ce Reduce diff to viotop and beegfstop
 * Tue May  5 2020 Devin Teske <dteske@fraubsd.org> 4.0-1
