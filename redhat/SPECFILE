@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 4.2.1
+Version: 4.3
 Release: 1
 Buildarch: noarch
 
@@ -75,6 +75,8 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Tue May  5 2020 Devin Teske <dteske@fraubsd.org> 4.3-1
+- 5e6a0df Refactor variable view size calculation
 * Tue May  5 2020 Devin Teske <dteske@fraubsd.org> 4.2.1-1
 - 25869de Remove unused local variable in process_cred()
 * Tue May  5 2020 Devin Teske <dteske@fraubsd.org> 4.2-1
