@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 3.5
+Version: 4.0
 Release: 1
 Buildarch: noarch
 
@@ -75,6 +75,8 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Tue May  5 2020 Devin Teske <dteske@fraubsd.org> 4.0-1
+- 7f6e695 Add support for live terminal resizing
 * Tue May  5 2020 Devin Teske <dteske@fraubsd.org> 3.5-1
 - 6ea70bd Add -b for showing bytes instead of bandwidth
 * Tue May  5 2020 Devin Teske <dteske@fraubsd.org> 3.4-1
