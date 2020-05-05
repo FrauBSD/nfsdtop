@@ -10,7 +10,7 @@ Group: Applications/FrauBSD
 Summary: nfsdtop
 License: BSD
 Version: 4.5
-Release: 2
+Release: 3
 Buildarch: noarch
 
 URL: https://www.fraubsd.org/nfsdtop
@@ -21,6 +21,7 @@ BuildRoot: %{_tmppath}/src
 
 Requires: /bin/awk
 Requires: /bin/sh
+Requires: bc
 Requires: bpftrace
 
 ############################################################ DESCRIPTION
@@ -75,6 +76,8 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Tue May  5 2020 Devin Teske <dteske@fraubsd.org> 4.5-3
+- No, really, add bc requirement
 * Tue May  5 2020 Devin Teske <dteske@fraubsd.org> 4.5-2
 - Add bc requirement
 * Tue May  5 2020 Devin Teske <dteske@fraubsd.org> 4.5-1
