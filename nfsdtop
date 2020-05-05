@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 09:34:05 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 09:40:20 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.0 $'
+VERSION='$Version: 4.1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -1053,6 +1053,14 @@ EOF
 		buffer_add_header()
 	}
 
+	function buffer_add1(arg1, total, write, write_bar, read_bar, read,
+		prefix, suffix)
+	{
+		buffer_add(sprintf(prefix fmt suffix, arg1,
+			total, write, bar_size, write_bar, bar_size,
+			read_bar, read))
+	}
+
 	function buffer_add_header(        prefix, suffix)
 	{
 		if (output_json) return
@@ -1067,9 +1075,8 @@ EOF
 		suffix = cons ? fgreset noinv : noinv nobold
 		empty_bar = ""
 		# ST: VIEWS
-		buffer_add(sprintf(prefix fmt suffix, view,
-			"TOTAL", "WRITE(IN)", bar_size, empty_bar, bar_size,
-			empty_bar, "READ(OUT)"))
+		buffer_add1(view, "TOTAL", "WRITE(IN)", empty_bar, empty_bar,
+			"READ(OUT)", prefix, suffix)
 	}
 
 	function buffer_add_data()
@@ -1288,16 +1295,14 @@ EOF
 			buffer_add("{" json_out "}\n")
 		} else if (show_bytes) {
 			# ST: VIEWS
-			buffer_add(sprintf(fmt, "total",
-				humanize(rw_total),
-				humanize(write_total), bar_size, write_bar,
-				bar_size, read_bar, humanize(read_total)))
+			buffer_add1("total", humanize(rw_total),
+				humanize(write_total), write_bar,
+				read_bar, humanize(read_total))
 		} else {
 			# ST: VIEWS
-			buffer_add(sprintf(fmt, "total",
-				humanize(rw_rate),
-				humanize(write_rate), bar_size, write_bar,
-				bar_size, read_bar, humanize(read_rate)))
+			buffer_add1("total", humanize(rw_rate),
+				humanize(write_rate), write_bar,
+				read_bar, humanize(read_rate))
 		}
 
 		#
@@ -1408,18 +1413,14 @@ EOF
 			buffer_add("{" json_out "}\n")
 		} else if (show_bytes) {
 			# ST: VIEWDATA
-			buffer_add(sprintf(fmt, cred,
-				humanize(cred_rw),
-				humanize(cred_write), bar_size,
-				write_bar, bar_size, read_bar,
-				humanize(cred_read)))
+			buffer_add1(cred, humanize(cred_rw),
+				humanize(cred_write), write_bar,
+				read_bar, humanize(cred_read))
 		} else {
 			# ST: VIEWDATA
-			buffer_add(sprintf(fmt, cred,
-				humanize(rw_rate),
-				humanize(write_rate), bar_size,
-				write_bar, bar_size, read_bar,
-				humanize(read_rate)))
+			buffer_add1(cred, humanize(rw_rate),
+				humanize(write_rate), write_bar,
+				read_bar, humanize(read_rate))
 		}
 
 		return 1
