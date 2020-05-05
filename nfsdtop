@@ -1,9 +1,32 @@
 #!/bin/sh
+# vi: set ft=sh noet ts=8 sw=8 :: Vi/ViM
 ############################################################ IDENT(1)
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-05-04 17:03:31 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-04 17:04:59 -0700 freebsdfrau $
+#
+############################################################ INFORMATION
+#
+# In nfsdtop, a ``view'' is the user's choice between -c, -g, -s, or -u.
+# For example, `-u' asks nfsdtop to display the ``user view'' where statistics
+# displayed are on a per-user basis.
+#
+# The code is broken down into:
+# 	- View selection (user choice)
+# 	- Filter selection (user choice)
+# 	- bpftrace execution
+# 	- awk to process bpftrace output
+#
+# Code navigating Search Terms/ST:
+# 	BPFTRACE	Start of bpftrace
+# 	FILTERS		Data filters
+# 	JSONDATA	JSON data generation
+# 	OPS		Data operations (read vs write)
+# 	POST		bpftrace post-processor (awk)
+# 	PRE		Start of pre-processor (sh)
+# 	TRACEDATA	bpftrace data generation and processing
+# 	VIEWS		View processing
 #
 ############################################################ DEFAULTS
 
@@ -22,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.4.2 $'
+VERSION='$Version: 2.5 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -179,7 +202,7 @@ atoi()
 ############################################################ MAIN
 
 #
-# Parse command-line options
+# Process command-line options
 #
 while getopts C:cdF:fG:ghi:JjN:nP:p:rS:sU:uvw flag; do
 	case "$flag" in
@@ -214,7 +237,7 @@ done
 shift $(( $OPTIND - 1 ))
 
 #
-# Check command-line arguments
+# Process command-line arguments
 #
 [ $# -eq 0 ] || usage "Too many arguments" # NOTREACHED
 
@@ -223,7 +246,7 @@ shift $(( $OPTIND - 1 ))
 #
 [ "$VIEW" ] || VIEW=USER VIEW_USER=1
 if [ ! "$OUTPUT_JSON" ]; then
-	case "$VIEW" in
+	case "$VIEW" in # ST: VIEWS
 	CLIENT) VIEW_FILE= VIEW_GROUP= VIEW_SERVER= VIEW_USER= ;;
 	FILE) VIEW_CLIENT= VIEW_GROUP= VIEW_SERVER= VIEW_USER= ;;
 	GROUP) VIEW_CLIENT= VIEW_FILE= VIEW_SERVER= VIEW_USER= ;;
@@ -269,7 +292,73 @@ case "$NSAMPLES" in
 esac
 
 #
-# Process `-C ip' option
+# Process `-G group'/`-U user' option
+#
+case "$FILTER_GROUP" in
+"") : leave-empty ;;
+*[!0-9]*) # Translate from name to GID
+	_FILTER_GROUP=$( awk \
+		-v sq="'" \
+		-v group_map="$GROUP_MAP" \
+		-v name="$FILTER_GROUP" \
+	'BEGIN {
+		delete name2gid
+		while (getline < group_map > 0) {
+			n = split($0, fields, /:/)
+			name2gid[fields[1]] = fields[3]
+		}
+		close(group_map)
+		if (name in name2gid) {
+			print name2gid[name]
+			exit 0
+		}
+		gsub(sq, "&\\\\&&", name)
+		cmd = sprintf("getent group %s%s%s", sq, name, sq)
+		cmd | getline group
+		close(cmd)
+		if (split(group, fields, /:/) >= 3) {
+			print fields[3]
+			exit 0
+		}
+		exit 1
+	}' 2> /dev/null ) || die "Unknown group %s" "$FILTER_GROUP"
+	FILTER_GROUP="$_FILTER_GROUP"
+	;;
+esac
+case "$FILTER_USER" in
+"") : leave-empty ;;
+*[!0-9]*) # Translate from name to UID
+	_FILTER_USER=$( awk \
+		-v sq="'" \
+		-v user_map="$PASSWD_MAP" \
+		-v name="$FILTER_USER" \
+	'BEGIN {
+		delete uid2name
+		while (getline < user_map > 0) {
+			n = split($0, fields, /:/)
+			name2uid[fields[1]] = fields[3]
+		}
+		close(user_map)
+		if (name in name2uid) {
+			print name2uid[name]
+			exit 0
+		}
+		gsub(sq, "&\\\\&&", name)
+		cmd = sprintf("getent passwd %s%s%s", sq, name, sq)
+		cmd | getline passwd
+		close(cmd)
+		if (split(passwd, fields, /:/) >= 3) {
+			print fields[3]
+			exit 0
+		}
+		exit 1
+	}' ) || die "Unknown user %s" "$FILTER_USER"
+	FILTER_USER="$_FILTER_USER"
+	;;
+esac
+
+#
+# Process `-C ip'/`-S ip' option
 #
 case "$FILTER_CLIENT" in
 "") : ok ;;
@@ -312,48 +401,9 @@ case "$FILTER_CLIENT" in
 	atoi $FILTER_CLIENT FILTER_CLIENT
 	;;
 esac
-
-#
-# Process `-G group' option
-#
-case "$FILTER_GROUP" in
-"") : ok ;;
-*[!0-9]*) # name
-	_FILTER_GROUP=$( awk \
-		-v sq="'" \
-		-v group_map="$GROUP_MAP" \
-		-v name="$FILTER_GROUP" \
-	'BEGIN {
-		delete name2gid
-		while (getline < group_map > 0) {
-			n = split($0, fields, /:/)
-			name2gid[fields[1]] = fields[3]
-		}
-		close(group_map)
-		if (name in name2gid) {
-			print name2gid[name]
-			exit 0
-		}
-		gsub(sq, "&\\\\&&", name)
-		cmd = sprintf("getent group %s%s%s", sq, name, sq)
-		cmd | getline group
-		close(cmd)
-		if (split(group, fields, /:/) >= 3) {
-			print fields[3]
-			exit 0
-		}
-		exit 1
-	}' 2> /dev/null ) || die "Unknown group %s" "$FILTER_GROUP"
-	FILTER_GROUP="$_FILTER_GROUP"
-	;;
-esac
-
-#
-# Process `-S ip' option
-#
 case "$FILTER_SERVER" in
-"") : ok ;;
-*[a-zA-Z]*)
+"") : leave-empty ;;
+*[a-zA-Z]*) # Translate from name to IP
 	_FILTER_SERVER=$( awk \
 		-v sq="'" \
 		-v ip_map="$IP_MAP" \
@@ -394,41 +444,6 @@ case "$FILTER_SERVER" in
 esac
 
 #
-# Process `-U user' option
-#
-case "$FILTER_USER" in
-"") : ok ;;
-*[!0-9]*) # name
-	_FILTER_USER=$( awk \
-		-v sq="'" \
-		-v user_map="$PASSWD_MAP" \
-		-v name="$FILTER_USER" \
-	'BEGIN {
-		delete uid2name
-		while (getline < user_map > 0) {
-			n = split($0, fields, /:/)
-			name2uid[fields[1]] = fields[3]
-		}
-		close(user_map)
-		if (name in name2uid) {
-			print name2uid[name]
-			exit 0
-		}
-		gsub(sq, "&\\\\&&", name)
-		cmd = sprintf("getent passwd %s%s%s", sq, name, sq)
-		cmd | getline passwd
-		close(cmd)
-		if (split(passwd, fields, /:/) >= 3) {
-			print fields[3]
-			exit 0
-		}
-		exit 1
-	}' ) || die "Unknown user %s" "$FILTER_USER"
-	FILTER_USER="$_FILTER_USER"
-	;;
-esac
-
-#
 # Get terminal size
 #
 size=$( stty size 2> /dev/null )
@@ -444,7 +459,8 @@ if [ "$size" ]; then
 fi
 
 #
-# Trace nfsd I/O
+# Run script
+# ST: PRE
 #
 export FILTER_FILE
 run_bpftrace <<EOF | awk \
@@ -462,16 +478,18 @@ run_bpftrace <<EOF | awk \
 	-v wide_view=${WIDE_VIEW:-0} \
 	'####################################### BEGIN
 
+	# ST: POST
+
 	BEGIN {
 		filter_file = ENVIRON["FILTER_FILE"]
 		samples_left = nsamples
 		waiting = "Waiting for bpftrace to initialize ..."
 
-		# Obtain awk pid
+		# Obtain current process (awk) pid
 		(cmd = "echo $PPID") | getline apid
 		close(cmd)
 
-		# Obtain sh pid
+		# Obtain parent process (sh) pid
 		getline stat < (file = sprintf("/proc/%d/stat", apid))
 		close(file)
 		split(stat, st)
@@ -481,6 +499,18 @@ run_bpftrace <<EOF | awk \
 		(cmd = sprintf("pgrep -P %d bpftrace", spid)) | getline bpid
 		close(cmd)
 
+		#
+		# Calculate columns and column widths
+		# ST: VIEWS
+		#
+		# NB: bar_size = size of bar column
+		# NB: vsz = size of VIEW column ("view size")
+		#
+		# If given -w (wide view) make bar_size fixed-width and
+		# vsz variable-width.
+		#
+		# Without -w, make vsz fixed-width and bar_size variable.
+		#
 		if (wide_view) {
 			vsz = cols - 36 - 4 - 21 # Maximize view column
 				# 36 = 3 x %12s
@@ -489,6 +519,11 @@ run_bpftrace <<EOF | awk \
 		} else {
 			vsz = 15 # Maximize bar column
 		}
+
+		#
+		# Calculate format and line width
+		# ST: VIEWS
+		#
 
 		fmt = "%-"vsz"s %12s %12s %*s|%-*s %-12s\n"
 		bar_size = (cols - vsz - 36 - 4 - 1) / 2
@@ -518,6 +553,7 @@ run_bpftrace <<EOF | awk \
 
 	function clear_data()
 	{
+		# ST: VIEWS
 		delete client_keys
 		delete file_keys
 		delete group_keys
@@ -552,7 +588,7 @@ run_bpftrace <<EOF | awk \
 			strftime("%c", systime())))
 				#  9 = "Interval:"
 				#  2 = number of spaces
-				# 31 = %31s = date
+				# 31 = %31s date
 		buffer_add(sprintf("\033[7;1m" fmt "\033[27;22m", view,
 			"TOTAL", "WRITE(IN)", bar_size, "", bar_size, "",
 			"READ(OUT)"))
@@ -600,6 +636,7 @@ run_bpftrace <<EOF | awk \
 
 	function parse_map()
 	{
+		# ST: TRACEDATA
 		if (!match($0, /^@[^\[]*\[/)) return 0
 		map_name = substr($0, RSTART + 1, RLENGTH - 2)
 		map_view = substr(map_name, 4)
@@ -609,6 +646,10 @@ run_bpftrace <<EOF | awk \
 		map_key = substr($0, RSTART + 1, RLENGTH - 3)
 		map_value = $NF
 
+		#
+		# ST: FILTERS
+		#
+
 		if (map_view == "user" || map_view == "group") {
 			map_key = int(map_key)
 		} else if (map_view == "file") {
@@ -616,6 +657,10 @@ run_bpftrace <<EOF | awk \
 			gsub(/, /, "/", map_key)
 			gsub("//+", "/", map_key)
 		}
+
+		#
+		# ST: VIEWS
+		#
 
 		if (!(map_view in map_views)) {
 			map_views[map_view]
@@ -626,6 +671,10 @@ run_bpftrace <<EOF | awk \
 		else if (map_view == "group") group_keys[map_key]
 		else if (map_view == "server") server_keys[map_key]
 		else if (map_view == "user") user_keys[map_key]
+
+		#
+		# ST: OPS
+		#
 
 		if (map_op == "rd") {
 			map_view_read[map_view] += map_value
@@ -730,6 +779,7 @@ run_bpftrace <<EOF | awk \
 				"write_rate", write_rate)
 			buffer_add("{" json_out "}\n")
 		} else {
+			# ST: VIEWS
 			read_bar = ""
 			write_bar = ""
 			buffer_add(sprintf(fmt, "total",
@@ -805,6 +855,7 @@ run_bpftrace <<EOF | awk \
 			}
 
 			if (output_json) {
+				# ST: JSONDATA
 				json_out = ""
 				json_out = json_add_uint(json_out, "time", tm)
 				json_out = json_add_str(json_out,
@@ -824,6 +875,7 @@ run_bpftrace <<EOF | awk \
 					"write_rate", write_rate)
 				buffer_add("{" json_out "}\n")
 			} else {
+				# ST: VIEWDATA
 				buffer_add(sprintf(fmt, cred,
 					humanize(write_rate + read_rate),
 					humanize(write_rate), bar_size,
@@ -845,7 +897,11 @@ run_bpftrace <<EOF | awk \
 		next
 	}
 
-	/^===$/ {
+	#
+	# ST: TRACEDATA
+	#
+
+	/^===$/ { # Data start
 		read_total = write_total = 0
 		clear_buffer()
 		buffer_add_header()
@@ -857,9 +913,9 @@ run_bpftrace <<EOF | awk \
 		next
 	}
 
-	/^@/ { parse_map() }
+	/^@/ { parse_map() } # Data
 
-	/^---$/ {
+	/^---$/ { # Data end
 		tm = systime()
 
 		#
@@ -883,6 +939,7 @@ run_bpftrace <<EOF | awk \
 /* -*- mode: dtrace-script; tab-width: 4 -*- ;; Emacs
  * vi: set ft=dtrace noet ts=4 sw=4 :: Vi/ViM
  */
+// ST: BPFTRACE
 ////////////////////////////////////////////////// INCLUDES
 
 #include <linux/sunrpc/svc.h>
@@ -945,6 +1002,7 @@ kretprobe:nfsd_read
 
 	\$filtered = 0;
 
+	// ST: FILTERS
 ${FILTER_CLIENT:+"
 	if (\$client_ip4num != $FILTER_CLIENT) { \$filtered = 1; }
 "}
@@ -960,6 +1018,7 @@ ${FILTER_USER:+"
 
 	if (\$filtered == 0)
 	{
+		// ST: VIEWS TRACEDATA
 ${VIEW_CLIENT:+"
 		@rd_client[ntop(AF_INET, \$client_ip4)] = sum(\$bytes);
 "}
@@ -1043,6 +1102,7 @@ kretprobe:nfsd_write
 
 	\$filtered = 0;
 
+	// ST: FILTERS
 ${FILTER_CLIENT:+"
 	if (\$client_ip4num != $FILTER_CLIENT) { \$filtered = 1; }
 "}
@@ -1058,6 +1118,7 @@ ${FILTER_USER:+"
 
 	if (\$filtered == 0)
 	{
+		// ST: VIEWS TRACEDATA
 ${VIEW_CLIENT:+"
 		@wr_client[ntop(AF_INET, \$client_ip4)] = sum(\$bytes);
 "}
@@ -1177,3 +1238,10 @@ exit $SUCCESS
 ################################################################################
 # END
 ################################################################################
+# Local Variables:
+# mode: sh
+# tab-width: 8
+# sh-basic-offset: 8
+# indent-tabs-mode: t
+# backward-delete-char-untabify-method: nil
+# End:
