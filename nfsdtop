@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 12:28:11 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 12:29:35 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.2 $'
+VERSION='$Version: 4.2.1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -1344,7 +1344,7 @@ EOF
 	function process_cred(curview, cred, read_total, write_total,
 		cred_read, read_bar, read_bar_pct, read_bar_size, read_rate,
 		cred_write, write_bar, write_bar_pct, write_bar_size,
-		write_rate, cred_rw, rw_rate, pch, _cred, key)
+		write_rate, cred_rw, rw_rate, pch, _cred)
 	{
 		pch = "="
 		debug1("-> process_cred(curview = %s, ...)", curview)
