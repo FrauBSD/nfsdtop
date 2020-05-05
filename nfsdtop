@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-05-04 17:04:59 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-04 17:06:46 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -30,7 +30,7 @@
 #
 ############################################################ DEFAULTS
 
-DEFAULT_INTERVAL=2 # seconds
+DEFAULT_INTERVAL=2.0 # seconds
 
 #
 # User/Group map files
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.5 $'
+VERSION='$Version: 2.5.1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -126,8 +126,7 @@ usage()
 	printf "$optfmt" "-h" "Print usage statement and exit."
 	printf "$optfmt" "-I file" "IP map file. Default \`$DEFAULT_IP_MAP'."
 	printf "$optfmt" "-i sec" \
-		"Set interval seconds. Default $DEFAULT_INTERVAL."
-	printf "$optfmt" "" "Accepts decimal point on seconds."
+		"Set interval seconds. Default \`$DEFAULT_INTERVAL'."
 	printf "$optfmt" "-J" "Output most JSON data. Same as \`-jcgsu'."
 	printf "$optfmt" "-j" "Output JSON formatted data."
 	printf "$optfmt" "-N num" "Perform num samples and exit."
