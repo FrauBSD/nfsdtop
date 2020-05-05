@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 12:25:57 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 12:28:11 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.1.1 $'
+VERSION='$Version: 4.2 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -940,7 +940,13 @@ EOF
 	function debug1(fmt,a1) { if (debugger) printf fmt "\n", a1 }
 	function debug2(fmt,a1,a2) { if (debugger) printf fmt "\n", a1, a2 }
 	function buffer_add(text) { BUFFER = BUFFER text }
-	function print_buffer() { printf "%s", BUFFER; fflush() }
+
+	function print_buffer()
+	{
+		if (!cons) buffer_add("\n")
+		printf "%s", BUFFER
+		fflush()
+	}
 
 	function info(str)
 	{
@@ -1020,9 +1026,11 @@ EOF
 		fmtsz -= 1
 		fmt = fmt (cons ? fgreset : "") "\n"
 
-		clear_buffer()
-		buffer_add_data()
-		print_buffer()
+		if (cons) {
+			clear_buffer()
+			buffer_add_data()
+			print_buffer()
+		}
 	}
 
 	function clear_data()
@@ -1048,7 +1056,7 @@ EOF
 	{
 		BUFFER = ""
 		if (output_json) return
-		if (!debugger)
+		if (!debugger && cons)
 			buffer_add(sprintf("\033[H\033[J"))
 		buffer_add_header()
 	}
@@ -1071,8 +1079,8 @@ EOF
 				#  9 = "Interval:"
 				#  2 = number of spaces
 				# 31 = %31s date
-		prefix = cons ? inv green : inv bold
-		suffix = cons ? fgreset noinv : noinv nobold
+		prefix = cons ? inv green : ""
+		suffix = cons ? fgreset noinv : ""
 		empty_bar = ""
 		# ST: VIEWS
 		buffer_add1(view, "TOTAL", "WRITE(IN)", empty_bar, empty_bar,
@@ -1320,7 +1328,7 @@ EOF
 		#
 		r = 1
 		n = _asort(_keys, _keys_sorted)
-		table_rows = output_json ? n : rows - 4
+		table_rows = output_json || !cons ? n : rows - 4
 		for (i = n; i >= 1 && r <= table_rows; i--) {
 			debug2("r=[%d] table_rows=[%d]", r, table_rows)
 			cred = _keys_sorted[i]
@@ -1328,7 +1336,7 @@ EOF
 			r += process_cred(curview, cred,
 				read_total, write_total)
 		}
-		if (i > 0) buffer_add(sprintf("%s(%d more) ... %s",
+		if (more = i > 0) buffer_add(sprintf("%s(%d more) ... %s",
 			cons ? inv bold yellow : "", i,
 			cons ? noinv nobold fgreset : ""))
 	}
