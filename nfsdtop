@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 12:30:50 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 12:32:03 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.3 $'
+VERSION='$Version: 4.3.1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -1068,9 +1068,8 @@ EOF
 	function buffer_add1(arg1, total, write, write_bar, read_bar, read,
 		prefix, suffix)
 	{
-		buffer_add(sprintf(prefix fmt suffix, arg1,
-			total, write, bar_size, write_bar, bar_size,
-			read_bar, read))
+		buffer_add(sprintf(prefix fmt suffix, arg1, total, write,
+			bar_size, write_bar, bar_size, read_bar, read))
 	}
 
 	function buffer_add_header(        prefix, suffix)
