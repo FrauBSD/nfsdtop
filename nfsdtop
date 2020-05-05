@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 09:24:17 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 09:25:43 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 3.1.4 $'
+VERSION='$Version: 3.2 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -509,6 +509,7 @@ fi
 	{
 		printf("===\n"); // Clear screen and draw header
 		printf("info|Sampling data for ${INTERVAL}s (\`-i sec')...\n");
+		time("time|%s\n");
 	}
 
 	////////////////////////////////////////////////// READ PROBES
@@ -748,6 +749,7 @@ ${VIEW_USER:+
 		clear(@wr_user);
 }
 
+		time("time|%s\n");
 		printf("---\n");
 	}
 
@@ -841,6 +843,7 @@ EOF
 
 	BEGIN {
 		exit_status = 0 # SUCCESS
+		time_delta = 0 # Calculated
 		samples_left = nsamples
 		srand() # seed clock
 
@@ -942,6 +945,9 @@ EOF
 			if (!output_json) print_buffer()
 			if (!no_names) load_files()
 		}
+
+		# Declare arrays
+		delete times
 	}
 
 	######################################## FUNCTIONS
@@ -981,8 +987,8 @@ EOF
 		clear_data()
 
 		BUFFER = ""
-		if (!output_json)
-			buffer_add(sprintf("\033[H\033[J"))
+		if (output_json) return
+		buffer_add(sprintf("\033[H\033[J"))
 	}
 
 	function buffer_add_header(        prefix, suffix)
@@ -1168,14 +1174,24 @@ EOF
 	}
 
 	function process_view(curview,
-		cred_read, read_bar, read_bar_pct, read_rate, read_total,
-		cred_write, write_bar, write_bar_pct, write_rate, write_total,
-		i, n, r, v, _keys_sorted, table_rows, cred)
+		read_bar, read_rate, read_total,
+		write_bar, write_rate, write_total,
+		rw_rate, rw_total,
+		_keys_sorted, cred, i, v, r, n, table_rows)
 	{
+		time_delta = times[2] - times[1]
+		if (time_delta < 1) time_delta = 1 # prevent division-by-0
+
 		read_total = map_view_read[curview]
-		read_rate = read_total / interval
+		read_rate = read_total / time_delta
+		read_bar = ""
+
 		write_total = map_view_write[curview]
-		write_rate = write_total / interval
+		write_rate = write_total / time_delta
+		write_bar = ""
+
+		rw_total = read_total + write_total
+		rw_rate = rw_total / time_delta
 
 		if (output_json) {
 			json_out = ""
@@ -1183,9 +1199,9 @@ EOF
 			json_out = json_add_str(json_out,
 				"ident", "total_" curview)
 			json_out = json_add_uint(json_out,
-				"total_bytes", read_total + write_total)
+				"total_bytes", rw_total)
 			json_out = json_add_float(json_out,
-				"total_rate", read_rate + write_rate)
+				"total_rate", rw_rate)
 			json_out = json_add_uint(json_out,
 				"read_bytes", read_total)
 			json_out = json_add_float(json_out,
@@ -1197,8 +1213,6 @@ EOF
 			buffer_add("{" json_out "}\n")
 		} else {
 			# ST: VIEWS
-			read_bar = ""
-			write_bar = ""
 			buffer_add(sprintf(fmt, "total",
 				humanize(write_rate + read_rate),
 				humanize(write_rate), bar_size, write_bar,
@@ -1221,88 +1235,101 @@ EOF
 		r = 1
 		n = _asort(_keys, _keys_sorted)
 		table_rows = output_json ? n : rows - 4
-		for (i = n; i >= 1 && r++ <= table_rows; i--) {
+		for (i = n; i >= 1 && r <= table_rows; i--) {
 			cred = _keys_sorted[i]
 			sub(/^ *[^ ]+ +/, "", cred) # Undecorate
-
-			cred_read = map_key_read[curview, cred]
-			cred_write = map_key_write[curview, cred]
-
-			read_rate = cred_read / interval
-			if (read_total > 0)
-				read_bar_pct = cred_read / read_total
-			else
-				read_bar_pct = 0
-			read_bar_size = bar_size * read_bar_pct
-			read_bar = sprintf("%*s", read_bar_size, "")
-			gsub(/ /, "=", read_bar)
-			sub(/.$/, ">", read_bar)
-
-			write_rate = cred_write / interval
-			if (write_total > 0)
-				write_bar_pct = cred_write / write_total
-			else
-				write_bar_pct = 0
-			write_bar_size = bar_size * write_bar_pct
-			write_bar = sprintf("%*s", write_bar_size, "")
-			gsub(/ /, "=", write_bar)
-			sub(/^./, "<", write_bar)
-
-			if (!no_names) {
-				if (curview == "client") {
-					if (cred in ip2name)
-						cred = ip2name[cred]
-				} else if (curview == "group") {
-					if (cred in gid2name)
-						cred = gid2name[cred]
-				} else if (curview == "server") {
-					if (cred in ip2name)
-						cred = ip2name[cred]
-				} else if (curview == "user") {
-					if (cred in uid2name)
-						cred = uid2name[cred]
-				}
-				if (!output_json && length(cred) > vsz) {
-					if (curview == "file")
-						cred = "..." substr(cred,
-							length(cred) - vsz + 4)
-					else
-						cred = substr(cred, 1, vsz)
-				}
-			}
-
-			if (output_json) {
-				# ST: JSONDATA
-				json_out = ""
-				json_out = json_add_uint(json_out, "time", tm)
-				json_out = json_add_str(json_out,
-					"ident", curview)
-				json_out = json_add_str(json_out, curview, cred)
-				json_out = json_add_uint(json_out,
-					"total_bytes", cred_read + cred_write)
-				json_out = json_add_float(json_out,
-					"total_rate", read_rate + write_rate)
-				json_out = json_add_uint(json_out,
-					"read_bytes", cred_read)
-				json_out = json_add_float(json_out,
-					"read_rate", read_rate)
-				json_out = json_add_uint(json_out,
-					"write_bytes", cred_write)
-				json_out = json_add_float(json_out,
-					"write_rate", write_rate)
-				buffer_add("{" json_out "}\n")
-			} else {
-				# ST: VIEWDATA
-				buffer_add(sprintf(fmt, cred,
-					humanize(write_rate + read_rate),
-					humanize(write_rate), bar_size,
-					write_bar, bar_size, read_bar,
-					humanize(read_rate)))
-			}
+			r += process_cred(curview, cred,
+				read_total, write_total)
 		}
 		if (i > 0) buffer_add(sprintf("%s(%d more) ... %s",
 			cons ? inv bold yellow : "", i,
 			cons ? noinv nobold fgreset : ""))
+	}
+
+	function process_cred(curview, cred, read_total, write_total,
+		cred_read, read_bar, read_bar_pct, read_bar_size, read_rate,
+		cred_write, write_bar, write_bar_pct, write_bar_size,
+		write_rate, cred_rw, rw_rate, pch, _cred, key)
+	{
+		pch = "="
+
+		cred_read = map_key_read[curview, cred]
+		cred_write = map_key_write[curview, cred]
+		cred_rw = cred_read + cred_write
+
+		read_rate = cred_read / time_delta
+		if (read_total > 0)
+			read_bar_pct = cred_read / read_total
+		else
+			read_bar_pct = 0
+		read_bar_size = bar_size * read_bar_pct
+		read_bar = sprintf("%*s", read_bar_size, "")
+		gsub(/ /, pch, read_bar)
+		sub(/.$/, ">", read_bar)
+
+		write_rate = cred_write / time_delta
+		if (write_total > 0)
+			write_bar_pct = cred_write / write_total
+		else
+			write_bar_pct = 0
+		write_bar_size = bar_size * write_bar_pct
+		write_bar = sprintf("%*s", write_bar_size, "")
+		gsub(/ /, pch, write_bar)
+		sub(/^./, "<", write_bar)
+
+		if (!no_names) {
+			if (curview == "client") {
+				if (cred in ip2name)
+					cred = ip2name[cred]
+			} else if (curview == "group") {
+				if (cred in gid2name)
+					cred = gid2name[cred]
+			} else if (curview == "server") {
+				if (cred in ip2name)
+					cred = ip2name[cred]
+			} else if (curview == "user") {
+				if (cred in uid2name)
+					cred = uid2name[cred]
+			}
+			if (!output_json && length(cred) > vsz) {
+				if (curview == "file")
+					cred = "..." substr(cred,
+						length(cred) - vsz + 4)
+				else
+					cred = substr(cred, 1, vsz)
+			}
+		}
+
+		rw_rate = cred_rw / time_delta
+		if (output_json) {
+			# ST: JSONDATA
+			json_out = ""
+			json_out = json_add_uint(json_out, "time", tm)
+			json_out = json_add_str(json_out, "ident", curview)
+			json_out = json_add_str(json_out, curview, cred)
+			json_out = json_add_uint(json_out,
+				"total_bytes", cred_rw)
+			json_out = json_add_float(json_out,
+				"total_rate", rw_rate)
+			json_out = json_add_uint(json_out,
+				"read_bytes", cred_read)
+			json_out = json_add_float(json_out,
+				"read_rate", read_rate)
+			json_out = json_add_uint(json_out,
+				"write_bytes", cred_write)
+			json_out = json_add_float(json_out,
+				"write_rate", write_rate)
+			buffer_add("{" json_out "}\n")
+		} else {
+			# ST: VIEWDATA
+			buffer_add(sprintf(fmt, cred,
+				humanize(write_rate + read_rate),
+				humanize(write_rate), bar_size,
+				write_bar, bar_size, read_bar,
+				humanize(read_rate)))
+		}
+
+		return 1
 	}
 
 	######################################## MAIN
@@ -1355,6 +1382,11 @@ EOF
 	}
 
 	call == "info" { if (!output_json) info($0) }
+
+	call == "time" {
+		times[1] = times[2]
+		times[2] = $0
+	}
 
 	################################################## END
 
