@@ -3,7 +3,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-05-04 17:02:36 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-04 17:03:31 -0700 freebsdfrau $
 #
 ############################################################ DEFAULTS
 
@@ -22,7 +22,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.4.1 $'
+VERSION='$Version: 2.4.2 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -131,7 +131,7 @@ run_bpftrace()
 		return
 	fi
 
-	exec bpftrace "$@"
+	exec bpftrace -B none /dev/stdin "$@"
 }
 
 isint()
@@ -447,7 +447,7 @@ fi
 # Trace nfsd I/O
 #
 export FILTER_FILE
-run_bpftrace /dev/stdin <<EOF | awk \
+run_bpftrace <<EOF | awk \
 	-v cols=$cols \
 	-v group_map="$GROUP_MAP" \
 	-v interval=$INTERVAL_SECONDS \
