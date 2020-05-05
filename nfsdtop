@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 09:25:43 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 09:26:52 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 3.2 $'
+VERSION='$Version: 3.3 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -156,7 +156,7 @@ run_bpftrace()
 		return
 	fi
 
-	exec bpftrace -B none /dev/stdin "$@"
+	bpftrace -B none /dev/stdin "$@"
 }
 
 isint()
@@ -507,6 +507,7 @@ fi
 
 	BEGIN
 	{
+		printf("init|"); // Initialize post-processor
 		printf("===\n"); // Clear screen and draw header
 		printf("info|Sampling data for ${INTERVAL}s (\`-i sec')...\n");
 		time("time|%s\n");
@@ -868,9 +869,21 @@ EOF
 		split(stat, st)
 		spid = st[4]
 
-		# Obtain bpftrace pid
-		(cmd = sprintf("pgrep -P %d bpftrace", spid)) | getline bpid
+		# Obtain parent process (sh) name
+		getline stat < (file = sprintf("/proc/%d/stat", spid))
+		close(file)
+		split(stat, st)
+		comm = st[2]
+		if (match(comm, /^\(.*\)$/))
+			comm = substr(comm, 2, length(comm) - 2)
+
+		# Obtain child (sh) pid
+		(cmd = sprintf("pgrep -P %d %s", spid, comm)) | getline cpid
 		close(cmd)
+
+
+
+
 
 		#
 		# Calculate columns and column widths
@@ -951,6 +964,18 @@ EOF
 	}
 
 	######################################## FUNCTIONS
+
+	function bpftrace_init()
+	{
+		# Obtain handler (sh) pid
+		(cmd = sprintf("pgrep -P %d %s", cpid, comm)) | getline wpid
+
+		# Obtain bpftrace pid
+		cmd = sprintf("pgrep -P %d bpftrace", wpid)
+		cmd | getline bpid
+		close(cmd)
+	}
+
 
 	function _systime() { return srand() }
 	function buffer_add(text) { BUFFER = BUFFER text }
@@ -1168,7 +1193,15 @@ EOF
 	function sample_check()
 	{
 		if (nsamples > 0 && --samples_left < 1) {
-			system(sprintf("kill %d > /dev/null 2>&1", bpid))
+			if (bpid == "") {
+				cmd = sprintf("pgrep -P %d bpftrace", cpid)
+				cmd | getline bpid
+				close(cmd)
+			}
+			if (bpid != "") {
+				system(sprintf("kill %d > /dev/null 2>&1",
+					bpid))
+			}
 			exit
 		}
 	}
@@ -1382,6 +1415,7 @@ EOF
 	}
 
 	call == "info" { if (!output_json) info($0) }
+	call == "init" { bpftrace_init() }
 
 	call == "time" {
 		times[1] = times[2]
