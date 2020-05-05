@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 12:32:03 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 12:36:02 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.3.1 $'
+VERSION='$Version: 4.3.2 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -1379,18 +1379,12 @@ EOF
 
 		if (!no_names) {
 			_cred = cred
-			if (curview == "client") {
-				if (cred in ip2name)
-					cred = ip2name[cred]
+			if (curview == "client" || curview == "server") {
+				if (cred in ip2name) cred = ip2name[cred]
 			} else if (curview == "group") {
-				if (cred in gid2name)
-					cred = gid2name[cred]
-			} else if (curview == "server") {
-				if (cred in ip2name)
-					cred = ip2name[cred]
+				if (cred in gid2name) cred = gid2name[cred]
 			} else if (curview == "user") {
-				if (cred in uid2name)
-					cred = uid2name[cred]
+				if (cred in uid2name) cred = uid2name[cred]
 			}
 			if (!output_json && length(cred) > vsz) {
 				if (curview == "file")
