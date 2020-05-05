@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 09:29:28 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 09:34:05 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 3.5 $'
+VERSION='$Version: 4.0 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -217,6 +217,17 @@ send_user()
 }
 
 info() { send_user info "$*"; }
+
+resize()
+{
+	local size
+	if [ -e /dev/tty ]; then
+		size=$( stty size < /dev/tty 2> /dev/null )
+	else
+		size=$( stty size 2> /dev/null )
+	fi
+	send_user resize "${size:-24 80}"
+}
 
 ############################################################ MAIN
 
@@ -485,23 +496,25 @@ esac
 #
 # Get terminal size
 #
-size=$( stty size 2> /dev/null )
+size=$( resize )
+size="${size#*|}"
 if [ "$size" ]; then
 	cols="${size#*[$IFS]}"
 	rows="${size%%[$IFS]*}"
-	case "$rows$cols" in
-	*[!0-9]*)
+fi
+case "$rows$cols" in
+""|*[!0-9]*)
 		cols=80
 		rows=24
 		;;
-	esac
-fi
+esac
 
 #
 # Run script
 # ST: PRE
 #
 {
+	trap resize SIGWINCH
 
 	#
 	# Start background bpftrace
@@ -900,9 +913,45 @@ EOF
 		(cmd = sprintf("pgrep -P %d %s", spid, comm)) | getline cpid
 		close(cmd)
 
+		if (!raw_view) {
+			clear_data()
+			resize()
+			if (!no_names) load_files()
+		}
 
+		# Declare arrays
+		delete times
+	}
 
+	######################################## FUNCTIONS
 
+	function bpftrace_init()
+	{
+		# Obtain handler (sh) pid
+		(cmd = sprintf("pgrep -P %d %s", cpid, comm)) | getline wpid
+
+		# Obtain bpftrace pid
+		cmd = sprintf("pgrep -P %d bpftrace", wpid)
+		cmd | getline bpid
+		close(cmd)
+	}
+
+	function _systime() { return srand() }
+	function debug1(fmt,a1) { if (debugger) printf fmt "\n", a1 }
+	function debug2(fmt,a1,a2) { if (debugger) printf fmt "\n", a1, a2 }
+	function buffer_add(text) { BUFFER = BUFFER text }
+	function print_buffer() { printf "%s", BUFFER; fflush() }
+
+	function info(str)
+	{
+		printf "%sINFO%s %s\n",
+			cons ? magenta : "", cons ? fgreset : "", str > stderr
+		fflush(stderr)
+	}
+
+	function resize()
+	{
+		if (output_json) return
 
 		#
 		# Calculate columns and column widths
@@ -971,42 +1020,9 @@ EOF
 		fmtsz -= 1
 		fmt = fmt (cons ? fgreset : "") "\n"
 
-		if (!raw_view) {
-			clear_buffer()
-			buffer_add_header()
-			if (!output_json) print_buffer()
-			if (!no_names) load_files()
-		}
-
-		# Declare arrays
-		delete times
-	}
-
-	######################################## FUNCTIONS
-
-	function bpftrace_init()
-	{
-		# Obtain handler (sh) pid
-		(cmd = sprintf("pgrep -P %d %s", cpid, comm)) | getline wpid
-
-		# Obtain bpftrace pid
-		cmd = sprintf("pgrep -P %d bpftrace", wpid)
-		cmd | getline bpid
-		close(cmd)
-	}
-
-
-	function _systime() { return srand() }
-	function debug1(fmt,a1) { if (debugger) printf fmt "\n", a1 }
-	function debug2(fmt,a1,a2) { if (debugger) printf fmt "\n", a1, a2 }
-	function buffer_add(text) { BUFFER = BUFFER text }
-	function print_buffer() { printf "%s", BUFFER; fflush() }
-
-	function info(str)
-	{
-		printf "%sINFO%s %s\n",
-			cons ? magenta : "", cons ? fgreset : "", str > stderr
-		fflush(stderr)
+		clear_buffer()
+		buffer_add_data()
+		print_buffer()
 	}
 
 	function clear_data()
@@ -1030,12 +1046,11 @@ EOF
 
 	function clear_buffer()
 	{
-		clear_data()
-
 		BUFFER = ""
 		if (output_json) return
 		if (!debugger)
 			buffer_add(sprintf("\033[H\033[J"))
+		buffer_add_header()
 	}
 
 	function buffer_add_header(        prefix, suffix)
@@ -1044,15 +1059,17 @@ EOF
 		buffer_add(sprintf("Interval: %-*s %31s\n",
 			fmtsz - 9 - 2 - 31,
 			sprintf("%.3f", interval) "s",
-			strftime("%c", _systime())))
+			strftime("%c", tm = _systime())))
 				#  9 = "Interval:"
 				#  2 = number of spaces
 				# 31 = %31s date
 		prefix = cons ? inv green : inv bold
 		suffix = cons ? fgreset noinv : noinv nobold
+		empty_bar = ""
+		# ST: VIEWS
 		buffer_add(sprintf(prefix fmt suffix, view,
-			"TOTAL", "WRITE(IN)", bar_size, "", bar_size, "",
-			"READ(OUT)"))
+			"TOTAL", "WRITE(IN)", bar_size, empty_bar, bar_size,
+			empty_bar, "READ(OUT)"))
 	}
 
 	function buffer_add_data()
@@ -1094,6 +1111,7 @@ EOF
 	function load_keys(map_view,        map_key)
 	{
 		delete _keys
+		# ST: VIEWS
 		if (map_view == "client") for (map_key in client_keys)
 			_keys[map_key] = client_keys[map_key]
 		else if (map_view == "file") for (map_key in file_keys)
@@ -1427,8 +1445,8 @@ EOF
 
 	/^===/ { # Data start
 		read_total = write_total = 0
+		clear_data()
 		clear_buffer()
-		buffer_add_header()
 		next
 	}
 
@@ -1441,7 +1459,6 @@ EOF
 		# Dump information
 		#
 		print_buffer()
-		clear_data()
 		sample_check() # Exit if no more samples desired
 		next
 	}
@@ -1459,6 +1476,13 @@ EOF
 
 	call == "info" { if (!output_json) info($0) }
 	call == "init" { bpftrace_init() }
+
+	call == "resize" {
+		if (output_json) next
+		rows = $1
+		cols = $2
+		resize()
+	}
 
 	call == "time" {
 		times[1] = times[2]
