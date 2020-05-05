@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 09:12:56 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 09:18:50 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 3.0.1 $'
+VERSION='$Version: 3.1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -488,16 +488,14 @@ fi
 # ST: PRE
 #
 {
-	info "Waiting for bpftrace to initialize ..."
-
 	export FILTER_FILE
 
 	#
-	# Start bpftrace
+	# Start background bpftrace
 	# NB: M-x package-install [RET] dtrace-script-mode [RET]
 	# ST: BPFTRACE
 	#
-	run_bpftrace <<EOF
+	run_bpftrace <<EOF &
 	${DEBUG:+#!/usr/bin/bpftrace}
 	/* -*- mode: dtrace-script; tab-width: 4 -*- ;; Emacs
 	 * vi: set ft=dtrace noet ts=4 sw=4 :: Vi/ViM
@@ -795,6 +793,34 @@ ${VIEW_SERVER:+
 	// END
 	//////////////////////////////////////////////////////////////////////
 EOF
+	pid=$!
+
+	#
+	# Identify child bpftrace
+	#
+	if [ ! "$DEBUG" ]; then
+		info "Waiting for bpftrace to initialize..."
+		while kill -0 $pid 2> /dev/null; do
+			bpid=$( pgrep -P $pid bpftrace ) && break
+			sleep 1
+		done
+		if ! kill -0 $pid 2> /dev/null; then
+			wait $pid > /dev/null 2>&1 # Collect exit status
+			echo EXIT:$? # Send status to post-processor
+			exit
+		fi
+	fi
+
+	#
+	# Wait on background (bpftrace) child
+	#
+	status_collected=
+	while kill -0 $bpid > /dev/null 2>&1; do
+		wait > /dev/null 2>&1 # Collect exit status
+		[ "$status_collected" ] || status_collected=$?
+	done
+	echo EXIT:$status_collected # Send status to post-processor
+
 } | awk -v cols=$cols \
 	-v cons=${CONS:-0} \
 	-v group_map="$GROUP_MAP" \
@@ -815,6 +841,8 @@ EOF
 
 	BEGIN {
 		filter_file = ENVIRON["FILTER_FILE"]
+
+		exit_status = 0 # SUCCESS
 		samples_left = nsamples
 
 		inv	= "\033[7m"
@@ -1270,6 +1298,8 @@ EOF
 
 	######################################## MAIN
 
+	sub(/^EXIT:/, "") { exit_status = $0; next }
+
 	raw_view {
 		print
 
@@ -1323,12 +1353,10 @@ EOF
 
 	call == "info" { if (!output_json) info($0) }
 
-	############################################################
-	# END
-	############################################################
-' # END-QUOTE
+	################################################## END
 
-exit $SUCCESS
+	END { exit exit_status }
+' # END-QUOTE
 
 ################################################################################
 # END
