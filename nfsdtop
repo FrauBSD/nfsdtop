@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 09:40:20 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 12:25:57 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.1 $'
+VERSION='$Version: 4.1.1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -504,9 +504,9 @@ if [ "$size" ]; then
 fi
 case "$rows$cols" in
 ""|*[!0-9]*)
-		cols=80
-		rows=24
-		;;
+	cols=80
+	rows=24
+	;;
 esac
 
 #
