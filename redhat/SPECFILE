@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 4.3.1
+Version: 4.3.2
 Release: 1
 Buildarch: noarch
 
@@ -75,6 +75,8 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Tue May  5 2020 Devin Teske <dteske@fraubsd.org> 4.3.2-1
+- 8b5d70e Refactor name mapping
 * Tue May  5 2020 Devin Teske <dteske@fraubsd.org> 4.3.1-1
 - 7fcd8e0 NFC Whitespace
 * Tue May  5 2020 Devin Teske <dteske@fraubsd.org> 4.3-1
