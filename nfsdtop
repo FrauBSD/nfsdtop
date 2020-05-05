@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 12:29:35 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 12:30:50 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.2.1 $'
+VERSION='$Version: 4.3 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -980,8 +980,12 @@ EOF
 			bar_size = bar_size_fixed
 
 			# Variable-width (%-*s)
-			vsz = cols - dsz * 3 - 4 - bar_size_fixed # Maximize view col
-				#  4 = number of spaces
+			vsz = cols
+			vsz -= 0 + 1 # variable-width VIEW + space
+			vsz -= dsz + 1 # TOTAL + space
+			vsz -= dsz + 1 # WRITE(IN) + space
+			vsz -= bar_size + 1 # bar + space
+			vsz -= dsz # READ(OUT)
 		} else {
 			# Fixed-width
 			vsz = vsz_fixed
