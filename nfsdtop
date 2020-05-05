@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 09:26:52 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 09:27:54 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 3.3 $'
+VERSION='$Version: 3.4 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -60,6 +60,7 @@ FAILURE=1
 #
 COLOR=					# -a
 DEBUG=					# -d
+DEBUGGER=				# -D
 FILTER_CLIENT=				# -C ip
 FILTER_FILE=				# -F regex
 FILTER_GROUP=				# -G group
@@ -120,6 +121,7 @@ usage()
 	printf "$optfmt" "-a" "Always enable color."
 	printf "$optfmt" "-C ip" "Client filter (IPv4 only)."
 	printf "$optfmt" "-c" "View read/write activity by client."
+	printf "$optfmt" "-D" "Enable debugger."
 	printf "$optfmt" "-d" "Debug. Print bpftrace script and exit."
 	printf "$optfmt" "-F regex" "File filter. Implies \`-f'."
 	printf "$optfmt" "-f" \
@@ -219,11 +221,12 @@ info() { send_user info "$*"; }
 #
 # Process command-line options
 #
-while getopts aC:cdF:fG:ghi:JjN:nP:p:rS:sU:uvw flag; do
+while getopts aC:cDdF:fG:ghi:JjN:nP:p:rS:sU:uvw flag; do
 	case "$flag" in
 	a) COLOR=1 ;;
 	C) FILTER_CLIENT="$OPTARG" ;;
 	c) VIEW=CLIENT VIEW_CLIENT=1 ;;
+	D) DEBUGGER=1 RAW_VIEW=1 ;;
 	d) DEBUG=1 RAW_VIEW=1 ;;
 	F) VIEW=FILE VIEW_FILE=1 WIDE_VIEW=1 FILTER_FILE="$OPTARG" ;;
 	f) VIEW=FILE VIEW_FILE=1 WIDE_VIEW=1 ;;
@@ -825,6 +828,8 @@ EOF
 
 } | awk -v cols=$cols \
 	-v cons=${CONS:-0} \
+	-v debug=${DEBUG:-0} \
+	-v debugger=${DEBUGGER:-0} \
 	-v filter_file="$FILTER_FILE" \
 	-v group_map="$GROUP_MAP" \
 	-v interval=$INTERVAL_SECONDS \
@@ -843,6 +848,8 @@ EOF
 	# ST: POST
 
 	BEGIN {
+		debug2("Terminal size (rows, cols) = (%d, %d)", rows, cols)
+
 		exit_status = 0 # SUCCESS
 		time_delta = 0 # Calculated
 		samples_left = nsamples
@@ -978,6 +985,8 @@ EOF
 
 
 	function _systime() { return srand() }
+	function debug1(fmt,a1) { if (debugger) printf fmt "\n", a1 }
+	function debug2(fmt,a1,a2) { if (debugger) printf fmt "\n", a1, a2 }
 	function buffer_add(text) { BUFFER = BUFFER text }
 	function print_buffer() { printf "%s", BUFFER; fflush() }
 
@@ -1013,7 +1022,8 @@ EOF
 
 		BUFFER = ""
 		if (output_json) return
-		buffer_add(sprintf("\033[H\033[J"))
+		if (!debugger)
+			buffer_add(sprintf("\033[H\033[J"))
 	}
 
 	function buffer_add_header(        prefix, suffix)
@@ -1214,6 +1224,7 @@ EOF
 	{
 		time_delta = times[2] - times[1]
 		if (time_delta < 1) time_delta = 1 # prevent division-by-0
+		debug1("Time delta is %d seconds", time_delta)
 
 		read_total = map_view_read[curview]
 		read_rate = read_total / time_delta
@@ -1269,6 +1280,7 @@ EOF
 		n = _asort(_keys, _keys_sorted)
 		table_rows = output_json ? n : rows - 4
 		for (i = n; i >= 1 && r <= table_rows; i--) {
+			debug2("r=[%d] table_rows=[%d]", r, table_rows)
 			cred = _keys_sorted[i]
 			sub(/^ *[^ ]+ +/, "", cred) # Undecorate
 			r += process_cred(curview, cred,
@@ -1285,6 +1297,8 @@ EOF
 		write_rate, cred_rw, rw_rate, pch, _cred, key)
 	{
 		pch = "="
+		debug1("-> process_cred(curview = %s, ...)", curview)
+		debug1("+ cred=[%s]", cred)
 
 		cred_read = map_key_read[curview, cred]
 		cred_write = map_key_write[curview, cred]
@@ -1311,6 +1325,7 @@ EOF
 		sub(/^./, "<", write_bar)
 
 		if (!no_names) {
+			_cred = cred
 			if (curview == "client") {
 				if (cred in ip2name)
 					cred = ip2name[cred]
@@ -1331,6 +1346,7 @@ EOF
 				else
 					cred = substr(cred, 1, vsz)
 			}
+			if (cred != _cred) debug1("+ cred=[%s]", cred)
 		}
 
 		rw_rate = cred_rw / time_delta
@@ -1368,6 +1384,7 @@ EOF
 	######################################## MAIN
 
 	sub(/^EXIT:/, "") { exit_status = $0; next }
+	debug { sub(/^\t/, ""); print; next }
 
 	raw_view {
 		print
@@ -1375,7 +1392,7 @@ EOF
 		# Exit if no more samples desired
 		if (/^---$/) sample_check()
 
-		next
+		if (!debugger) next
 	}
 
 	#
