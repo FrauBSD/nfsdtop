@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 12:40:20 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 12:47:03 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.4 $'
+VERSION='$Version: 4.5 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -1065,8 +1065,8 @@ EOF
 		buffer_add_header()
 	}
 
-	function buffer_add1(arg1, total, write, write_bar, read_bar, read,
-		prefix, suffix)
+	function buffer_add1(arg1, total, read, read_bar, write_bar,
+		write, prefix, suffix)
 	{
 		buffer_add(sprintf(prefix fmt suffix, arg1, total, write,
 			bar_size, write_bar, bar_size, read_bar, read))
@@ -1086,8 +1086,9 @@ EOF
 		suffix = cons ? fgreset noinv : ""
 		empty_bar = ""
 		# ST: VIEWS
-		buffer_add1(view, "TOTAL", "WRITE(IN)", empty_bar, empty_bar,
-			"READ(OUT)", prefix, suffix)
+		buffer_add1(view, "TOTAL",
+			"READ(OUT)", empty_bar, empty_bar, "WRITE(IN)",
+			prefix, suffix)
 	}
 
 	function buffer_add_data()
@@ -1261,6 +1262,7 @@ EOF
 				system(sprintf("kill %d > /dev/null 2>&1",
 					bpid))
 			}
+			if (more) printf "\n"
 			exit
 		}
 	}
@@ -1307,13 +1309,13 @@ EOF
 		} else if (show_bytes) {
 			# ST: VIEWS
 			buffer_add1("total", humanize(rw_total),
-				humanize(write_total), write_bar,
-				read_bar, humanize(read_total))
+				humanize(read_total), read_bar,
+				write_bar, humanize(write_total))
 		} else {
 			# ST: VIEWS
 			buffer_add1("total", humanize(rw_rate),
-				humanize(write_rate), write_bar,
-				read_bar, humanize(read_rate))
+				humanize(read_rate), read_bar,
+				write_bar, humanize(write_rate))
 		}
 
 		#
@@ -1419,8 +1421,8 @@ EOF
 					cred = substr(cred, 1, vsz)
 			}
 			buffer_add1(cred, humanize(cred_rw),
-				humanize(cred_write), write_bar,
-				read_bar, humanize(cred_read))
+				humanize(cred_read), read_bar,
+				write_bar, humanize(cred_write))
 		} else {
 			# ST: VIEWDATA
 			if (length(cred) > vsz) {
@@ -1431,8 +1433,8 @@ EOF
 					cred = substr(cred, 1, vsz)
 			}
 			buffer_add1(cred, humanize(rw_rate),
-				humanize(write_rate), write_bar,
-				read_bar, humanize(read_rate))
+				humanize(read_rate), read_bar,
+				write_bar, humanize(write_rate))
 		}
 
 		return 1
