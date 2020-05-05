@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop 2020-05-04 17:06:46 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop 2020-05-05 09:10:16 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 2.5.1 $'
+VERSION='$Version: 3.0 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -58,6 +58,7 @@ FAILURE=1
 #
 # Command-line options
 #
+COLOR=					# -a
 DEBUG=					# -d
 FILTER_CLIENT=				# -C ip
 FILTER_FILE=				# -F regex
@@ -82,6 +83,7 @@ WIDE_VIEW=				# -w
 #
 # Miscellaneous
 #
+CONS=1
 _FILTER_CLIENT=
 _FILTER_GROUP=
 _FILTER_SERVER=
@@ -115,6 +117,7 @@ usage()
 
 	printf "Usage: %s [OPTIONS]\n" "$pgm"
 	printf "Options:\n"
+	printf "$optfmt" "-a" "Always enable color."
 	printf "$optfmt" "-C ip" "Client filter (IPv4 only)."
 	printf "$optfmt" "-c" "View read/write activity by client."
 	printf "$optfmt" "-d" "Debug. Print bpftrace script and exit."
@@ -198,13 +201,27 @@ atoi()
 	eval $__var_to_set=$__num
 }
 
+#
+# ST: CALLS
+#
+
+send_user()
+{
+	local type="$1"
+	shift 1 # type
+	printf "%s|%s\n" "$type" "$*"
+}
+
+info() { send_user info "$*"; }
+
 ############################################################ MAIN
 
 #
 # Process command-line options
 #
-while getopts C:cdF:fG:ghi:JjN:nP:p:rS:sU:uvw flag; do
+while getopts aC:cdF:fG:ghi:JjN:nP:p:rS:sU:uvw flag; do
 	case "$flag" in
+	a) COLOR=1 ;;
 	C) FILTER_CLIENT="$OPTARG" ;;
 	c) VIEW=CLIENT VIEW_CLIENT=1 ;;
 	d) DEBUG=1 RAW_VIEW=1 ;;
@@ -252,6 +269,15 @@ if [ ! "$OUTPUT_JSON" ]; then
 	SERVER) VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= VIEW_USER= ;;
 	USER) VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= VIEW_SERVER= ;;
 	esac
+fi
+
+#
+# Process `-a' option
+#
+if [ "$COLOR" ]; then
+	CONS=1
+else
+	[ -t 1 ] || CONS= # stdout is not a tty
 fi
 
 #
@@ -461,9 +487,316 @@ fi
 # Run script
 # ST: PRE
 #
-export FILTER_FILE
-run_bpftrace <<EOF | awk \
-	-v cols=$cols \
+{
+	info "Waiting for bpftrace to initialize ..."
+
+	export FILTER_FILE
+
+	#
+	# Start bpftrace
+	# NB: M-x package-install [RET] dtrace-script-mode [RET]
+	# ST: BPFTRACE
+	#
+	run_bpftrace <<EOF
+	${DEBUG:+#!/usr/bin/bpftrace}
+	/* -*- mode: dtrace-script; tab-width: 4 -*- ;; Emacs
+	 * vi: set ft=dtrace noet ts=4 sw=4 :: Vi/ViM
+	 */
+	////////////////////////////////////////////////// INCLUDES
+
+	#include <linux/sunrpc/svc.h>
+
+	////////////////////////////////////////////////// BEGIN
+
+	BEGIN
+	{
+		printf("===\n"); // Clear screen and draw header
+		printf("info|Sampling data for ${INTERVAL}s (\`-i sec')...\n");
+	}
+
+	////////////////////////////////////////////////// READ PROBES
+
+	kprobe:nfsd_read
+	{
+		\$rqstp = (struct svc_rqst *)arg0;
+		@nfsd_read_rqstp[tid] = \$rqstp;
+		@nfsd_read_countp[tid] = arg5;
+		\$data = (int64 *)\$rqstp->rq_addr.__data;
+		\$num = (int64)*\$data;
+		@nfsd_read_client[tid] = \$num >> 16 & 0xFFFFFFFF;
+		\$data = (int64 *)\$rqstp->rq_daddr.__data;
+		\$num = (int64)*\$data;
+		@nfsd_read_server[tid] = \$num >> 16 & 0xFFFFFFFF;
+	}
+
+${VIEW_FILE:+"
+	kprobe:nfsd_init_raparms
+	/@nfsd_read_rqstp[tid] != 0/
+	{
+		@nfsd_read_filep[tid] = (struct file *)arg0;
+	}
+"}
+
+	kretprobe:nfsd_read
+	/@nfsd_read_rqstp[tid] != 0/
+	{
+		\$rqstp = @nfsd_read_rqstp[tid];
+		\$uid = \$rqstp->rq_cred.cr_uid.val;
+		\$gid = \$rqstp->rq_cred.cr_gid.val;
+		\$countp = @nfsd_read_countp[tid];
+		\$bytes = *\$countp;
+
+		\$client_ip4 = @nfsd_read_client[tid];
+		\$client_ip4num = (uint32)(\$client_ip4 >> 24 |
+			(\$client_ip4 >> 16 & 0xFF) << 8 |
+			(\$client_ip4 >> 8 & 0xFF) << 16 |
+			(\$client_ip4 & 0xFF) << 24);
+
+		\$server_ip4 = @nfsd_read_server[tid];
+		\$server_ip4num = (uint32)(\$server_ip4 >> 24 |
+			(\$server_ip4 >> 16 & 0xFF) << 8 |
+			(\$server_ip4 >> 8 & 0xFF) << 16 |
+			(\$server_ip4 & 0xFF) << 24);
+
+		delete(@nfsd_read_client[tid]);
+		delete(@nfsd_read_countp[tid]);
+		delete(@nfsd_read_rqstp[tid]);
+		delete(@nfsd_read_server[tid]);
+
+		\$filtered = 0;
+
+		// ST: FILTERS
+${FILTER_CLIENT:+"
+		if (\$client_ip4num != $FILTER_CLIENT) { \$filtered = 1; }
+"}
+${FILTER_GROUP:+"
+		if (\$gid != $FILTER_GROUP) { \$filtered = 1; }
+"}
+${FILTER_SERVER:+"
+		if (\$server_ip4num != $FILTER_SERVER) { \$filtered = 1; }
+"}
+${FILTER_USER:+"
+		if (\$uid != $FILTER_USER) { \$filtered = 1; }
+"}
+
+		if (\$filtered == 0)
+		{
+			// ST: VIEWS TRACEDATA
+${VIEW_CLIENT:+"
+			@rd_client[ntop(AF_INET, \$client_ip4)] = sum(\$bytes);
+"}
+
+${VIEW_FILE:+"
+			\$file = @nfsd_read_filep[tid];
+			\$de = \$file->f_dentry;
+			\$n1 = \$de->d_name.name;
+			\$de = \$de->d_parent;
+			\$n2 = \$de->d_name.name;
+
+			@rd_file[str(\$n2), str(\$n1)] = sum(\$bytes);
+"}
+
+${VIEW_GROUP:+"
+			@rd_group[\$gid] = sum(\$bytes);
+"}
+
+${VIEW_SERVER:+"
+			@rd_server[ntop(AF_INET, \$server_ip4)] = sum(\$bytes);
+"}
+
+${VIEW_USER:+"
+			@rd_user[\$uid] = sum(\$bytes);
+"}
+		}
+
+${VIEW_FILE:+
+		delete(@nfsd_read_filep[tid]);
+}
+	}
+
+	////////////////////////////////////////////////// WRITE PROBES
+
+	kprobe:nfsd_write
+	{
+		\$rqstp = (struct svc_rqst *)arg0;
+		@nfsd_write_rqstp[tid] = \$rqstp;
+		@nfsd_write_countp[tid] = arg5;
+		\$data = (int64 *)\$rqstp->rq_addr.__data;
+		\$num = (int64)*\$data;
+		@nfsd_write_client[tid] = \$num >> 16 & 0xFFFFFFFF;
+		\$data = (int64 *)\$rqstp->rq_daddr.__data;
+		\$num = (int64)*\$data;
+		@nfsd_write_server[tid] = \$num >> 16 & 0xFFFFFFFF;
+	}
+
+${VIEW_FILE:+"
+	kprobe:nfsd_vfs_write
+	/@nfsd_write_rqstp[tid] != 0/
+	{
+		@nfsd_write_filep[tid] = (struct file *)arg2;
+	}
+"}
+
+	kretprobe:nfsd_write
+	/@nfsd_write_rqstp[tid] != 0/
+	{
+		\$rqstp = @nfsd_write_rqstp[tid];
+		\$uid = \$rqstp->rq_cred.cr_uid.val;
+		\$gid = \$rqstp->rq_cred.cr_gid.val;
+		\$countp = @nfsd_write_countp[tid];
+		\$bytes = *\$countp;
+
+		\$client_ip4 = @nfsd_write_client[tid];
+		\$client_ip4num = (uint32)(\$client_ip4 >> 24 |
+			(\$client_ip4 >> 16 & 0xFF) << 8 |
+			(\$client_ip4 >> 8 & 0xFF) << 16 |
+			(\$client_ip4 & 0xFF) << 24);
+
+		\$server_ip4 = @nfsd_write_server[tid];
+		\$server_ip4num = (uint32)(\$server_ip4 >> 24 |
+			(\$server_ip4 >> 16 & 0xFF) << 8 |
+			(\$server_ip4 >> 8 & 0xFF) << 16 |
+			(\$server_ip4 & 0xFF) << 24);
+
+		delete(@nfsd_write_client[tid]);
+		delete(@nfsd_write_countp[tid]);
+		delete(@nfsd_write_rqstp[tid]);
+		delete(@nfsd_write_server[tid]);
+
+		\$filtered = 0;
+
+		// ST: FILTERS
+${FILTER_CLIENT:+"
+		if (\$client_ip4num != $FILTER_CLIENT) { \$filtered = 1; }
+"}
+${FILTER_GROUP:+"
+		if (\$gid != $FILTER_GROUP) { \$filtered = 1; }
+"}
+${FILTER_SERVER:+"
+		if (\$server_ip4num != $FILTER_SERVER) { \$filtered = 1; }
+"}
+${FILTER_USER:+"
+		if (\$uid != $FILTER_USER) { \$filtered = 1; }
+"}
+
+		if (\$filtered == 0)
+		{
+			// ST: VIEWS TRACEDATA
+${VIEW_CLIENT:+"
+			@wr_client[ntop(AF_INET, \$client_ip4)] = sum(\$bytes);
+"}
+
+${VIEW_FILE:+"
+			\$file = @nfsd_write_filep[tid];
+			\$de = \$file->f_dentry;
+			\$n1 = \$de->d_name.name;
+			\$de = \$de->d_parent;
+			\$n2 = \$de->d_name.name;
+
+			@wr_file[str(\$n2), str(\$n1)] = sum(\$bytes);
+"}
+
+${VIEW_GROUP:+"
+			@wr_group[\$gid] = sum(\$bytes);
+"}
+
+${VIEW_SERVER:+"
+			@wr_server[ntop(AF_INET, \$server_ip4)] = sum(\$bytes);
+"}
+
+${VIEW_USER:+"
+			@wr_user[\$uid] = sum(\$bytes);
+"}
+		}
+
+${VIEW_FILE:+
+		delete(@nfsd_write_filep[tid]);
+}
+	}
+
+	////////////////////////////////////////////////// INTERVAL PROBE
+
+	$INTERVAL_PROBE
+	{
+		printf("===\n");
+
+${VIEW_CLIENT:+
+		print(@rd_client);
+		print(@wr_client);
+		clear(@rd_client);
+		clear(@wr_client);
+}
+${VIEW_FILE:+
+		print(@rd_file);
+		print(@wr_file);
+		clear(@rd_file);
+		clear(@wr_file);
+}
+${VIEW_GROUP:+
+		print(@rd_group);
+		print(@wr_group);
+		clear(@rd_group);
+		clear(@wr_group);
+}
+${VIEW_SERVER:+
+		print(@rd_server);
+		print(@wr_server);
+		clear(@rd_server);
+		clear(@wr_server);
+}
+${VIEW_USER:+
+		print(@rd_user);
+		print(@wr_user);
+		clear(@rd_user);
+		clear(@wr_user);
+}
+
+		printf("---\n");
+	}
+
+	////////////////////////////////////////////////// END
+
+	END
+	{
+${VIEW_CLIENT:+
+		clear(@rd_client);
+		clear(@wr_client);
+}
+${VIEW_FILE:+
+		clear(@nfsd_read_filep);
+		clear(@nfsd_write_filep);
+		clear(@rd_file);
+		clear(@wr_file);
+}
+${VIEW_GROUP:+
+		clear(@rd_group);
+		clear(@wr_group);
+}
+${VIEW_USER:+
+		clear(@rd_user);
+		clear(@wr_user);
+}
+${VIEW_SERVER:+
+		clear(@rd_server);
+		clear(@wr_server);
+}
+
+		clear(@nfsd_read_client);
+		clear(@nfsd_read_countp);
+		clear(@nfsd_read_rqstp);
+		clear(@nfsd_read_server);
+		clear(@nfsd_write_client);
+		clear(@nfsd_write_countp);
+		clear(@nfsd_write_rqstp);
+		clear(@nfsd_write_server);
+	}
+
+	//////////////////////////////////////////////////////////////////////
+	// END
+	//////////////////////////////////////////////////////////////////////
+EOF
+} | awk -v cols=$cols \
+	-v cons=${CONS:-0} \
 	-v group_map="$GROUP_MAP" \
 	-v interval=$INTERVAL_SECONDS \
 	-v ip_map="$IP_MAP" \
@@ -473,6 +806,7 @@ run_bpftrace <<EOF | awk \
 	-v passwd_map="$PASSWD_MAP" \
 	-v raw_view=${RAW_VIEW:-0} \
 	-v rows=$rows \
+	-v stderr=/dev/stderr \
 	-v view="$VIEW" \
 	-v wide_view=${WIDE_VIEW:-0} \
 	'####################################### BEGIN
@@ -482,7 +816,17 @@ run_bpftrace <<EOF | awk \
 	BEGIN {
 		filter_file = ENVIRON["FILTER_FILE"]
 		samples_left = nsamples
-		waiting = "Waiting for bpftrace to initialize ..."
+
+		inv	= "\033[7m"
+		noinv	= "\033[27m"
+		bold    = "\033[1m"
+		nobold  = "\033[22m"
+		red     = "\033[31m"
+		green   = "\033[32m"
+		yellow  = "\033[33m"
+		magenta = "\033[35m"
+		cyan    = "\033[36m"
+		fgreset = "\033[39m"
 
 		# Obtain current process (awk) pid
 		(cmd = "echo $PPID") | getline apid
@@ -503,6 +847,7 @@ run_bpftrace <<EOF | awk \
 		# ST: VIEWS
 		#
 		# NB: bar_size = size of bar column
+		# NB: dsz = size of TOTAL, READ(IN), WRITE(OUT) data columns
 		# NB: vsz = size of VIEW column ("view size")
 		#
 		# If given -w (wide view) make bar_size fixed-width and
@@ -510,37 +855,64 @@ run_bpftrace <<EOF | awk \
 		#
 		# Without -w, make vsz fixed-width and bar_size variable.
 		#
+		dsz = 12
+		vsz_fixed = 15 # VIEW column
+		bar_size_fixed = cols <= 80 ? 11 : 21
 		if (wide_view) {
-			vsz = cols - 36 - 4 - 21 # Maximize view column
-				# 36 = 3 x %12s
+			# Fixed-width
+			bar_size = bar_size_fixed
+
+			# Variable-width (%-*s)
+			vsz = cols - dsz * 3 - 4 - bar_size_fixed # Maximize view col
 				#  4 = number of spaces
-				# 21 = minimum bar size
 		} else {
-			vsz = 15 # Maximize bar column
+			# Fixed-width
+			vsz = vsz_fixed
+
+			# Variable-width (%-*s)
+			bar_size = cols
+			bar_size -= vsz + 1 # VIEW + space
+			bar_size -= dsz + 1 # TOTAL + space
+			bar_size -= dsz + 1 # WRITE(IN) + space
+			bar_size -= 0 + 1 # variable-width bar + space
+			bar_size -= dsz # READ(OUT)
 		}
 
 		#
 		# Calculate format and line width
 		# ST: VIEWS
 		#
-
-		fmt = "%-"vsz"s %12s %12s %*s|%-*s %-12s\n"
-		bar_size = (cols - vsz - 36 - 4 - 1) / 2
-			# 36 = 3 x %12s
-			#  4 = number of spaces
-			#  1 = balance odd cols
-		fmtsz = vsz + 36 + 4 + int(bar_size) * 2 + 1
-			# 36 = 3 x %12s
-			#  4 = number of spaces
-			#  1 = "|" between bars
+		fmt = ""
+		fmtsz = 0
+		fmt = fmt " %-" vsz "s" # VIEW column
+		fmtsz += 1 + vsz
+		fmt = fmt " %" dsz "s" # TOTAL column
+		if (cons) {
+			fmt = fmt " " red "%" dsz "s" # WRITE(IN) column
+		} else {
+			fmt = fmt " %" dsz "s" # WRITE(IN) column
+		}
+		fmtsz += 1 + dsz + 1 + dsz
+		fmt = fmt " %*s" # write_bar
+		full_bar = bar_size
+		bar_size = int(bar_size / 2)
+		if (bar_size * 2 == full_bar) bar_size--
+		if (cons) {
+			fmt = fmt fgreset "|" cyan "%-*s" # read_bar
+		} else {
+			fmt = fmt "|%-*s" # read_bar
+		}
+		fmtsz += 1 + bar_size + 1 + bar_size
+		fmt = fmt " %-" dsz "s" # READ(OUT) column
+		fmtsz += 1 + dsz
+		fmt = substr(fmt, 2) # Trim leading space
+		fmtsz -= 1
+		fmt = fmt (cons ? fgreset : "") "\n"
 
 		if (!raw_view) {
 			clear_buffer()
 			buffer_add_header()
-			if (!output_json) {
-				buffer_add(waiting "\n")
-				print_buffer()
-			}
+			if (!output_json) print_buffer()
 			if (!no_names) load_files()
 		}
 	}
@@ -548,7 +920,14 @@ run_bpftrace <<EOF | awk \
 	######################################## FUNCTIONS
 
 	function buffer_add(text) { BUFFER = BUFFER text }
-	function print_buffer() { printf "%s", BUFFER }
+	function print_buffer() { printf "%s", BUFFER; fflush() }
+
+	function info(str)
+	{
+		printf "%sINFO%s %s\n",
+			cons ? magenta : "", cons ? fgreset : "", str > stderr
+		fflush(stderr)
+	}
 
 	function clear_data()
 	{
@@ -578,7 +957,7 @@ run_bpftrace <<EOF | awk \
 			buffer_add(sprintf("\033[H\033[J"))
 	}
 
-	function buffer_add_header()
+	function buffer_add_header(        prefix, suffix)
 	{
 		if (output_json) return
 		buffer_add(sprintf("Interval: %-*s %31s\n",
@@ -588,7 +967,9 @@ run_bpftrace <<EOF | awk \
 				#  9 = "Interval:"
 				#  2 = number of spaces
 				# 31 = %31s date
-		buffer_add(sprintf("\033[7;1m" fmt "\033[27;22m", view,
+		prefix = cons ? inv green : inv bold
+		suffix = cons ? fgreset noinv : noinv nobold
+		buffer_add(sprintf(prefix fmt suffix, view,
 			"TOTAL", "WRITE(IN)", bar_size, "", bar_size, "",
 			"READ(OUT)"))
 	}
@@ -882,7 +1263,9 @@ run_bpftrace <<EOF | awk \
 					humanize(read_rate)))
 			}
 		}
-		if (i > 0) buffer_add(sprintf("(%d more) ... ", i))
+		if (i > 0) buffer_add(sprintf("%s(%d more) ... %s",
+			cons ? inv bold yellow : "", i,
+			cons ? noinv nobold fgreset : ""))
 	}
 
 	######################################## MAIN
@@ -907,12 +1290,7 @@ run_bpftrace <<EOF | awk \
 		next
 	}
 
-	sub(/^info\|/, "") {
-		if (!output_json) print
-		next
-	}
-
-	/^@/ { parse_map() } # Data
+	/^@/ { parse_map(); next } # Data
 
 	/^---$/ { # Data end
 		tm = systime()
@@ -929,308 +1307,26 @@ run_bpftrace <<EOF | awk \
 		print_buffer()
 		clear_data()
 		sample_check() # Exit if no more samples desired
+		next
 	}
+
+	#
+	# ST: CALLS
+	#
+
+	{ call = "" }
+
+	match($0, /^[_a-z]+(-[_a-z]+)?\|/) {
+		call = substr($0, 1, RLENGTH - 1)
+		$0 = substr($0, RSTART + RLENGTH)
+	}
+
+	call == "info" { if (!output_json) info($0) }
 
 	############################################################
 	# END
 	############################################################
 ' # END-QUOTE
-/* -*- mode: dtrace-script; tab-width: 4 -*- ;; Emacs
- * vi: set ft=dtrace noet ts=4 sw=4 :: Vi/ViM
- */
-// ST: BPFTRACE
-////////////////////////////////////////////////// INCLUDES
-
-#include <linux/sunrpc/svc.h>
-
-////////////////////////////////////////////////// BEGIN
-
-BEGIN {
-	printf("===\n"); // Clear screen and draw header
-	printf("info|Sampling data for ${INTERVAL}s (\`-i sec')...\n");
-}
-
-////////////////////////////////////////////////// READ PROBES
-
-kprobe:nfsd_read
-{
-	\$rqstp = (struct svc_rqst *)arg0;
-	@nfsd_read_rqstp[tid] = \$rqstp;
-	@nfsd_read_countp[tid] = arg5;
-	\$data = (int64 *)\$rqstp->rq_addr.__data;
-	\$num = (int64)*\$data;
-	@nfsd_read_client[tid] = \$num >> 16 & 0xFFFFFFFF;
-	\$data = (int64 *)\$rqstp->rq_daddr.__data;
-	\$num = (int64)*\$data;
-	@nfsd_read_server[tid] = \$num >> 16 & 0xFFFFFFFF;
-}
-
-${VIEW_FILE:+"
-kprobe:nfsd_init_raparms
-/@nfsd_read_rqstp[tid] != 0/
-{
-	@nfsd_read_filep[tid] = (struct file *)arg0;
-}
-"}
-
-kretprobe:nfsd_read
-/@nfsd_read_rqstp[tid] != 0/
-{
-	\$rqstp = @nfsd_read_rqstp[tid];
-	\$uid = \$rqstp->rq_cred.cr_uid.val;
-	\$gid = \$rqstp->rq_cred.cr_gid.val;
-	\$countp = @nfsd_read_countp[tid];
-	\$bytes = *\$countp;
-
-	\$client_ip4 = @nfsd_read_client[tid];
-	\$client_ip4num = (uint32)(\$client_ip4 >> 24 |
-		(\$client_ip4 >> 16 & 0xFF) << 8 |
-		(\$client_ip4 >> 8 & 0xFF) << 16 |
-		(\$client_ip4 & 0xFF) << 24);
-
-	\$server_ip4 = @nfsd_read_server[tid];
-	\$server_ip4num = (uint32)(\$server_ip4 >> 24 |
-		(\$server_ip4 >> 16 & 0xFF) << 8 |
-		(\$server_ip4 >> 8 & 0xFF) << 16 |
-		(\$server_ip4 & 0xFF) << 24);
-
-	delete(@nfsd_read_client[tid]);
-	delete(@nfsd_read_countp[tid]);
-	delete(@nfsd_read_rqstp[tid]);
-	delete(@nfsd_read_server[tid]);
-
-	\$filtered = 0;
-
-	// ST: FILTERS
-${FILTER_CLIENT:+"
-	if (\$client_ip4num != $FILTER_CLIENT) { \$filtered = 1; }
-"}
-${FILTER_GROUP:+"
-	if (\$gid != $FILTER_GROUP) { \$filtered = 1; }
-"}
-${FILTER_SERVER:+"
-	if (\$server_ip4num != $FILTER_SERVER) { \$filtered = 1; }
-"}
-${FILTER_USER:+"
-	if (\$uid != $FILTER_USER) { \$filtered = 1; }
-"}
-
-	if (\$filtered == 0)
-	{
-		// ST: VIEWS TRACEDATA
-${VIEW_CLIENT:+"
-		@rd_client[ntop(AF_INET, \$client_ip4)] = sum(\$bytes);
-"}
-
-${VIEW_FILE:+"
-		\$file = @nfsd_read_filep[tid];
-		\$de = \$file->f_dentry;
-		\$n1 = \$de->d_name.name;
-		\$de = \$de->d_parent;
-		\$n2 = \$de->d_name.name;
-
-		@rd_file[str(\$n2), str(\$n1)] = sum(\$bytes);
-"}
-
-${VIEW_GROUP:+"
-		@rd_group[\$gid] = sum(\$bytes);
-"}
-
-${VIEW_SERVER:+"
-		@rd_server[ntop(AF_INET, \$server_ip4)] = sum(\$bytes);
-"}
-
-${VIEW_USER:+"
-		@rd_user[\$uid] = sum(\$bytes);
-"}
-	}
-
-${VIEW_FILE:+
-	delete(@nfsd_read_filep[tid]);
-}
-}
-
-////////////////////////////////////////////////// WRITE PROBES
-
-kprobe:nfsd_write
-{
-	\$rqstp = (struct svc_rqst *)arg0;
-	@nfsd_write_rqstp[tid] = \$rqstp;
-	@nfsd_write_countp[tid] = arg5;
-	\$data = (int64 *)\$rqstp->rq_addr.__data;
-	\$num = (int64)*\$data;
-	@nfsd_write_client[tid] = \$num >> 16 & 0xFFFFFFFF;
-	\$data = (int64 *)\$rqstp->rq_daddr.__data;
-	\$num = (int64)*\$data;
-	@nfsd_write_server[tid] = \$num >> 16 & 0xFFFFFFFF;
-}
-
-${VIEW_FILE:+"
-kprobe:nfsd_vfs_write
-/@nfsd_write_rqstp[tid] != 0/
-{
-	@nfsd_write_filep[tid] = (struct file *)arg2;
-}
-"}
-
-kretprobe:nfsd_write
-/@nfsd_write_rqstp[tid] != 0/
-{
-	\$rqstp = @nfsd_write_rqstp[tid];
-	\$uid = \$rqstp->rq_cred.cr_uid.val;
-	\$gid = \$rqstp->rq_cred.cr_gid.val;
-	\$countp = @nfsd_write_countp[tid];
-	\$bytes = *\$countp;
-
-	\$client_ip4 = @nfsd_write_client[tid];
-	\$client_ip4num = (uint32)(\$client_ip4 >> 24 |
-		(\$client_ip4 >> 16 & 0xFF) << 8 |
-		(\$client_ip4 >> 8 & 0xFF) << 16 |
-		(\$client_ip4 & 0xFF) << 24);
-
-	\$server_ip4 = @nfsd_write_server[tid];
-	\$server_ip4num = (uint32)(\$server_ip4 >> 24 |
-		(\$server_ip4 >> 16 & 0xFF) << 8 |
-		(\$server_ip4 >> 8 & 0xFF) << 16 |
-		(\$server_ip4 & 0xFF) << 24);
-
-	delete(@nfsd_write_client[tid]);
-	delete(@nfsd_write_countp[tid]);
-	delete(@nfsd_write_rqstp[tid]);
-	delete(@nfsd_write_server[tid]);
-
-	\$filtered = 0;
-
-	// ST: FILTERS
-${FILTER_CLIENT:+"
-	if (\$client_ip4num != $FILTER_CLIENT) { \$filtered = 1; }
-"}
-${FILTER_GROUP:+"
-	if (\$gid != $FILTER_GROUP) { \$filtered = 1; }
-"}
-${FILTER_SERVER:+"
-	if (\$server_ip4num != $FILTER_SERVER) { \$filtered = 1; }
-"}
-${FILTER_USER:+"
-	if (\$uid != $FILTER_USER) { \$filtered = 1; }
-"}
-
-	if (\$filtered == 0)
-	{
-		// ST: VIEWS TRACEDATA
-${VIEW_CLIENT:+"
-		@wr_client[ntop(AF_INET, \$client_ip4)] = sum(\$bytes);
-"}
-
-${VIEW_FILE:+"
-		\$file = @nfsd_write_filep[tid];
-		\$de = \$file->f_dentry;
-		\$n1 = \$de->d_name.name;
-		\$de = \$de->d_parent;
-		\$n2 = \$de->d_name.name;
-
-		@wr_file[str(\$n2), str(\$n1)] = sum(\$bytes);
-"}
-
-${VIEW_GROUP:+"
-		@wr_group[\$gid] = sum(\$bytes);
-"}
-
-${VIEW_SERVER:+"
-		@wr_server[ntop(AF_INET, \$server_ip4)] = sum(\$bytes);
-"}
-
-${VIEW_USER:+"
-		@wr_user[\$uid] = sum(\$bytes);
-"}
-	}
-
-${VIEW_FILE:+
-	delete(@nfsd_write_filep[tid]);
-}
-}
-
-////////////////////////////////////////////////// INTERVAL PROBE
-
-$INTERVAL_PROBE
-{
-	printf("===\n");
-
-${VIEW_CLIENT:+
-	print(@rd_client);
-	print(@wr_client);
-	clear(@rd_client);
-	clear(@wr_client);
-}
-${VIEW_FILE:+
-	print(@rd_file);
-	print(@wr_file);
-	clear(@rd_file);
-	clear(@wr_file);
-}
-${VIEW_GROUP:+
-	print(@rd_group);
-	print(@wr_group);
-	clear(@rd_group);
-	clear(@wr_group);
-}
-${VIEW_SERVER:+
-	print(@rd_server);
-	print(@wr_server);
-	clear(@rd_server);
-	clear(@wr_server);
-}
-${VIEW_USER:+
-	print(@rd_user);
-	print(@wr_user);
-	clear(@rd_user);
-	clear(@wr_user);
-}
-
-	printf("---\n");
-}
-
-////////////////////////////////////////////////// END
-
-END
-{
-${VIEW_CLIENT:+
-	clear(@rd_client);
-	clear(@wr_client);
-}
-${VIEW_FILE:+
-	clear(@nfsd_read_filep);
-	clear(@nfsd_write_filep);
-	clear(@rd_file);
-	clear(@wr_file);
-}
-${VIEW_GROUP:+
-	clear(@rd_group);
-	clear(@wr_group);
-}
-${VIEW_USER:+
-	clear(@rd_user);
-	clear(@wr_user);
-}
-${VIEW_SERVER:+
-	clear(@rd_server);
-	clear(@wr_server);
-}
-
-	clear(@nfsd_read_client);
-	clear(@nfsd_read_countp);
-	clear(@nfsd_read_rqstp);
-	clear(@nfsd_read_server);
-	clear(@nfsd_write_client);
-	clear(@nfsd_write_countp);
-	clear(@nfsd_write_rqstp);
-	clear(@nfsd_write_server);
-}
-
-//////////////////////////////////////////////////////////////////////
-// END
-//////////////////////////////////////////////////////////////////////
-EOF
 
 exit $SUCCESS
 
