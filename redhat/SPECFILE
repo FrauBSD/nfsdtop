@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 2.4.1
+Version: 2.4.2
 Release: 1
 Buildarch: noarch
 
@@ -75,6 +75,8 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Mon May  4 2020 Devin Teske <dteske@fraubsd.org> 2.4.2-1
+- 12e7faf Disable bpftrace output buffering
 * Mon May  4 2020 Devin Teske <dteske@fraubsd.org> 2.4.1-1
 - 848348b Refactor run_bpftrace()
 * Mon May  4 2020 Devin Teske <dteske@fraubsd.org> 2.4-1
