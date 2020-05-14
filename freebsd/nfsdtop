@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 15:13:27 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 16:31:04 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.5-beta-2 $'
+VERSION='$Version: 4.5-beta-3 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -635,7 +635,7 @@ ${FILTER_USER:+
 		{
 			/* ST: VIEWS TRACEDATA */
 ${VIEW_CLIENT:+
-			@rd_client["rd_client", this->client_ip4] =
+			@rd_client["@rd_client", this->client_ip4] =
 				sum(this->bytes);
 }
 
@@ -646,21 +646,21 @@ ${VIEW_CLIENT:+
 			\$de = \$de->d_parent;
 			\$n2 = \$de->d_name.name;
 
-			@rd_file["rd_file", str(\$n2), str(\$n1)] =
+			@rd_file["@rd_file", str(\$n2), str(\$n1)] =
 				sum(this->bytes);
 }?*/
 
 ${VIEW_GROUP:+
-			@rd_group["rd_group", this->gid] = sum(this->bytes);
+			@rd_group["@rd_group", this->gid] = sum(this->bytes);
 }
 
 /*?${VIEW_SERVER:+
-			@rd_server["rd_server", this->server_ip4] =
+			@rd_server["@rd_server", this->server_ip4] =
 				sum(this->bytes);
 }?*/
 
 ${VIEW_USER:+
-			@rd_user["rd_user", this->uid] = sum(this->bytes);
+			@rd_user["@rd_user", this->uid] = sum(this->bytes);
 }
 		}
 	}
@@ -715,7 +715,7 @@ ${FILTER_USER:+
 		{
 			/* ST: VIEWS TRACEDATA */
 ${VIEW_CLIENT:+
-			@wr_client["wr_client", this->client_ip4] =
+			@wr_client["@wr_client", this->client_ip4] =
 				sum(this->bytes);
 }
 
@@ -726,21 +726,21 @@ ${VIEW_CLIENT:+
 			\$de = \$de->d_parent;
 			\$n2 = \$de->d_name.name;
 
-			@wr_file["wr_file", str(\$n2), str(\$n1)] =
+			@wr_file["@wr_file", str(\$n2), str(\$n1)] =
 				sum(this->bytes);
 }?*/
 
 ${VIEW_GROUP:+
-			@wr_group["wr_group", this->gid] = sum(this->bytes);
+			@wr_group["@wr_group", this->gid] = sum(this->bytes);
 }
 
 /*?${VIEW_SERVER:+
-			@wr_server["wr_server", this->server_ip4] =
+			@wr_server["@wr_server", this->server_ip4] =
 				sum(\$bytes);
 }?*/
 
 ${VIEW_USER:+
-			@wr_user["wr_user", this->uid] = sum(this->bytes);
+			@wr_user["@wr_user", this->uid] = sum(this->bytes);
 }
 		}
 	}
@@ -1074,7 +1074,8 @@ EOF
 		buffer_add(sprintf("Interval: %-*s %31s\n",
 			fmtsz - 9 - 2 - 31,
 			sprintf("%.3f", interval) "s",
-			strftime("%c", tm = _systime())))
+			""))
+#?			strftime("%c", tm = _systime())))
 				#  9 = "Interval:"
 				#  2 = number of spaces
 				# 31 = %31s date
@@ -1142,13 +1143,11 @@ EOF
 	function parse_map()
 	{
 		# ST: TRACEDATA
-		if (!match($0, /^@[^\[]*\[/)) return 0
-		map_name = substr($0, RSTART + 1, RLENGTH - 2)
+		map_name = substr($1, 2)
 		map_view = substr(map_name, 4)
 		map_op = substr(map_name, 1, 2) # rd/wr
 
-		if (!match($0, /\[.*\]:/)) return 0
-		map_key = substr($0, RSTART + 1, RLENGTH - 3)
+		map_key = $2
 		map_value = $NF
 
 		#
@@ -1462,7 +1461,7 @@ EOF
 		next
 	}
 
-	/^@/ { parse_map(); next } # Data
+	$1 ~ /^@/ { parse_map(); next } # Data
 
 	/^---$/ { # Data end
 		buffer_add_data()
