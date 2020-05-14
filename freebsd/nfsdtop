@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-13 21:49:26 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 11:50:27 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.5-alpha-3 $'
+VERSION='$Version: 4.5-alpha-4 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -62,9 +62,9 @@ COLOR=					# -a
 DEBUG=					# -d
 DEBUGGER=				# -D
 FILTER_CLIENT=				# -C ip
-FILTER_FILE=				# -F regex
+#?FILTER_FILE=				# -F regex
 FILTER_GROUP=				# -G group
-FILTER_SERVER=				# -S ip
+#?FILTER_SERVER=				# -S ip
 FILTER_USER=				# -U user
 GROUP_MAP="$DEFAULT_GROUP_MAP"		# -P file
 INTERVAL=$DEFAULT_INTERVAL		# -i sec
@@ -76,9 +76,9 @@ PASSWD_MAP="$DEFAULT_PASSWD_MAP"	# -p file
 RAW_VIEW=				# -r
 SHOW_BYTES=				# -b
 VIEW_CLIENT=				# -c
-VIEW_FILE=				# -f
+#?VIEW_FILE=				# -f
 VIEW_GROUP=				# -g
-VIEW_SERVER=				# -s
+#?VIEW_SERVER=				# -s
 VIEW_USER=				# -u (default)
 WIDE_VIEW=				# -w
 
@@ -88,7 +88,7 @@ WIDE_VIEW=				# -w
 CONS=1
 _FILTER_CLIENT=
 _FILTER_GROUP=
-_FILTER_SERVER=
+#?_FILTER_SERVER=
 _FILTER_USER=
 INTERVAL_PROBE= # Calculated
 INTERVAL_SECONDS= # Raw value for awk
@@ -121,7 +121,7 @@ usage()
 	printf "Options:\n"
 	printf "$optfmt" "-a" "Always enable color."
 	printf "$optfmt" "-b" "Show bytes instead of bandwidth."
-#?	printf "$optfmt" "-C ip" "Client filter (IPv4 only)."
+	printf "$optfmt" "-C ip" "Client filter (IPv4 only)."
 	printf "$optfmt" "-c" "View read/write activity by client."
 	printf "$optfmt" "-D" "Enable debugger."
 	printf "$optfmt" "-d" "Debug. Print dtrace script and exit."
@@ -195,16 +195,16 @@ checkip()
 	esac
 }
 
-atoi()
-{
-	local __addr="$1" __var_to_set="$2" __num=0
-	if isip "$__addr"; then
-		local IFS=.
-		set -- $__addr
-		__num=$(( ($1 << 24) + ($2 << 16) + ($3 << 8) + $4 ))
-	fi
-	eval $__var_to_set=$__num
-}
+#?atoi()
+#?{
+#?	local __addr="$1" __var_to_set="$2" __num=0
+#?	if isip "$__addr"; then
+#?		local IFS=.
+#?		set -- $__addr
+#?		__num=$(( ($1 << 24) + ($2 << 16) + ($3 << 8) + $4 ))
+#?	fi
+#?	eval $__var_to_set=$__num
+#?}
 
 #
 # ST: CALLS
@@ -236,11 +236,11 @@ resize()
 # Process command-line options
 #
 #?while getopts abC:cDdF:fG:ghi:JjN:nP:p:rS:sU:uvw flag; do
-while getopts abcDdG:ghi:JjN:nP:p:rU:uvw flag; do
+while getopts abC:cDdG:ghi:JjN:nP:p:rU:uvw flag; do
 	case "$flag" in
 	a) COLOR=1 ;;
 	b) SHOW_BYTES=1 ;;
-#?	C) FILTER_CLIENT="$OPTARG" ;;
+	C) FILTER_CLIENT="$OPTARG" ;;
 	c) VIEW=CLIENT VIEW_CLIENT=1 ;;
 	D) DEBUGGER=1 RAW_VIEW=1 ;;
 	d) DEBUG=1 RAW_VIEW=1 ;;
@@ -290,11 +290,14 @@ fi
 [ "$VIEW" ] || VIEW=USER VIEW_USER=1
 if [ ! "$OUTPUT_JSON" ]; then
 	case "$VIEW" in # ST: VIEWS
-	CLIENT) VIEW_FILE= VIEW_GROUP= VIEW_SERVER= VIEW_USER= ;;
+#?	CLIENT) VIEW_FILE= VIEW_GROUP= VIEW_SERVER= VIEW_USER= ;;
+	CLIENT) VIEW_GROUP= VIEW_USER= ;;
 #?	FILE) VIEW_CLIENT= VIEW_GROUP= VIEW_SERVER= VIEW_USER= ;;
-	GROUP) VIEW_CLIENT= VIEW_FILE= VIEW_SERVER= VIEW_USER= ;;
+#?	GROUP) VIEW_CLIENT= VIEW_FILE= VIEW_SERVER= VIEW_USER= ;;
+	GROUP) VIEW_CLIENT= VIEW_USER= ;;
 #?	SERVER) VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= VIEW_USER= ;;
-	USER) VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= VIEW_SERVER= ;;
+#?	USER) VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= VIEW_SERVER= ;;
+	USER) VIEW_CLIENT= VIEW_GROUP= ;;
 	esac
 fi
 
@@ -410,7 +413,8 @@ case "$FILTER_USER" in
 esac
 
 #
-# Process `-C ip'/`-S ip' option
+#?# Process `-C ip'/`-S ip' option
+# Process `-C ip' option
 #
 case "$FILTER_CLIENT" in
 "") : ok ;;
@@ -446,54 +450,54 @@ case "$FILTER_CLIENT" in
 	}' 2> /dev/null ) || die "Unknown host %s" "$FILTER_CLIENT"
 	FILTER_CLIENT="$_FILTER_CLIENT"
 	checkip "$FILTER_CLIENT" # NOTREACHED if non-ip
-	atoi $FILTER_CLIENT FILTER_CLIENT
+#?	atoi $FILTER_CLIENT FILTER_CLIENT
 	;;
 *)
 	checkip "$FILTER_CLIENT" # NOTREACHED if non-ip
-	atoi $FILTER_CLIENT FILTER_CLIENT
+#?	atoi $FILTER_CLIENT FILTER_CLIENT
 	;;
 esac
-case "$FILTER_SERVER" in
-"") : leave-empty ;;
-*[a-zA-Z]*) # Translate from name to IP
-	_FILTER_SERVER=$( awk \
-		-v sq="'" \
-		-v ip_map="$IP_MAP" \
-		-v host="$FILTER_SERVER" \
-	'BEGIN {
-		delete host2ip
-		while (getline < ip_map > 0) {
-			if (/^[[:space:]]*(#|$)/) continue
-			n = split($0, fields, /[[:space:]]+/)
-			host2ip[fields[2]] = fields[1]
-		}
-		close(ip_map)
-		if (host in host2ip) {
-			print host2ip[host]
-			exit 0
-		} else if (host !~ /\.$/ && (host ".") in host2ip) {
-			print host2ip[host "."]
-			exit 0
-		}
-		gsub(sq, "&\\\\&&", host)
-		cmd = sprintf("host -t A %s%s%s", sq, host, sq)
-		cmd | getline
-		close(cmd)
-		if ($NF !~ /NXDOMAIN/) {
-			print $NF
-			exit 0
-		}
-		exit 1
-	}' 2> /dev/null ) || die "Unknown host %s" "$FILTER_SERVER"
-	FILTER_SERVER="$_FILTER_SERVER"
-	checkip "$FILTER_SERVER" # NOTREACHED if non-ip
-	atoi $FILTER_SERVER FILTER_SERVER
-	;;
-*)
-	checkip "$FILTER_SERVER" # NOTREACHED if non-ip
-	atoi $FILTER_SERVER FILTER_SERVER
-	;;
-esac
+#?case "$FILTER_SERVER" in
+#?"") : leave-empty ;;
+#?*[a-zA-Z]*) # Translate from name to IP
+#?	_FILTER_SERVER=$( awk \
+#?		-v sq="'" \
+#?		-v ip_map="$IP_MAP" \
+#?		-v host="$FILTER_SERVER" \
+#?	'BEGIN {
+#?		delete host2ip
+#?		while (getline < ip_map > 0) {
+#?			if (/^[[:space:]]*(#|$)/) continue
+#?			n = split($0, fields, /[[:space:]]+/)
+#?			host2ip[fields[2]] = fields[1]
+#?		}
+#?		close(ip_map)
+#?		if (host in host2ip) {
+#?			print host2ip[host]
+#?			exit 0
+#?		} else if (host !~ /\.$/ && (host ".") in host2ip) {
+#?			print host2ip[host "."]
+#?			exit 0
+#?		}
+#?		gsub(sq, "&\\\\&&", host)
+#?		cmd = sprintf("host -t A %s%s%s", sq, host, sq)
+#?		cmd | getline
+#?		close(cmd)
+#?		if ($NF !~ /NXDOMAIN/) {
+#?			print $NF
+#?			exit 0
+#?		}
+#?		exit 1
+#?	}' 2> /dev/null ) || die "Unknown host %s" "$FILTER_SERVER"
+#?	FILTER_SERVER="$_FILTER_SERVER"
+#?	checkip "$FILTER_SERVER" # NOTREACHED if non-ip
+#?#?	atoi $FILTER_SERVER FILTER_SERVER
+#?	;;
+#?*)
+#?	checkip "$FILTER_SERVER" # NOTREACHED if non-ip
+#?#?	atoi $FILTER_SERVER FILTER_SERVER
+#?	;;
+#?esac
 
 #
 # Get terminal size
