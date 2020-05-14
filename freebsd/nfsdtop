@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 15:05:45 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 15:13:27 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.5-beta-1 $'
+VERSION='$Version: 4.5-beta-2 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -598,14 +598,6 @@ esac
 			((struct sockaddr *)this->nfsd_read_nam);
 	}
 
-/*?${VIEW_FILE:+
-	kprobe:nfsd_init_raparms
-	/@nfsd_read_rqstp[tid] != 0/
-	{
-		@nfsd_read_filep[tid] = (struct file *)arg0;
-	\}
-}?*/
-
 	fbt:kernel:nfsvno_read:entry
 	/this->nfsd_read_nd != NULL/
 	{
@@ -643,7 +635,8 @@ ${FILTER_USER:+
 		{
 			/* ST: VIEWS TRACEDATA */
 ${VIEW_CLIENT:+
-			@rd_client[this->client_ip4] = sum(this->bytes);
+			@rd_client["rd_client", this->client_ip4] =
+				sum(this->bytes);
 }
 
 /*?${VIEW_FILE:+
@@ -653,25 +646,23 @@ ${VIEW_CLIENT:+
 			\$de = \$de->d_parent;
 			\$n2 = \$de->d_name.name;
 
-			@rd_file[str(\$n2), str(\$n1)] = sum(this->bytes);
+			@rd_file["rd_file", str(\$n2), str(\$n1)] =
+				sum(this->bytes);
 }?*/
 
 ${VIEW_GROUP:+
-			@rd_group[this->gid] = sum(this->bytes);
+			@rd_group["rd_group", this->gid] = sum(this->bytes);
 }
 
 /*?${VIEW_SERVER:+
-			@rd_server[this->server_ip4] = sum(this->bytes);
+			@rd_server["rd_server", this->server_ip4] =
+				sum(this->bytes);
 }?*/
 
 ${VIEW_USER:+
-			@rd_user[this->uid] = sum(this->bytes);
+			@rd_user["rd_user", this->uid] = sum(this->bytes);
 }
 		}
-
-/*?${VIEW_FILE:+
-		delete(@nfsd_read_filep[tid]);
-}?*/
 	}
 
 	/************************* WRITE  PROBES *************************/
@@ -686,14 +677,6 @@ ${VIEW_USER:+
 		this->nfsd_write_info = xlate <sainfo_t>
 			((struct sockaddr *)this->nfsd_write_nam);
 	}
-
-/*?${VIEW_FILE:+
-	kprobe:nfsd_vfs_write
-	/@nfsd_write_rqstp[tid] != 0/
-	{
-		@nfsd_write_filep[tid] = (struct file *)arg2;
-	\}
-}?*/
 
 	fbt:kernel:nfsvno_write:entry
 	/this->nfsd_write_nd != NULL/
@@ -732,7 +715,8 @@ ${FILTER_USER:+
 		{
 			/* ST: VIEWS TRACEDATA */
 ${VIEW_CLIENT:+
-			@wr_client[this->client_ip4] = sum(this->bytes);
+			@wr_client["wr_client", this->client_ip4] =
+				sum(this->bytes);
 }
 
 /*?${VIEW_FILE:+
@@ -742,25 +726,23 @@ ${VIEW_CLIENT:+
 			\$de = \$de->d_parent;
 			\$n2 = \$de->d_name.name;
 
-			@wr_file[str(\$n2), str(\$n1)] = sum(this->bytes);
+			@wr_file["wr_file", str(\$n2), str(\$n1)] =
+				sum(this->bytes);
 }?*/
 
 ${VIEW_GROUP:+
-			@wr_group[this->gid] = sum(this->bytes);
+			@wr_group["wr_group", this->gid] = sum(this->bytes);
 }
 
 /*?${VIEW_SERVER:+
-			@wr_server[this->server_ip4] = sum(\$bytes);
+			@wr_server["wr_server", this->server_ip4] =
+				sum(\$bytes);
 }?*/
 
 ${VIEW_USER:+
-			@wr_user[this->uid] = sum(this->bytes);
+			@wr_user["wr_user", this->uid] = sum(this->bytes);
 }
 		}
-
-/*?${VIEW_FILE:+
-		delete(@nfsd_write_filep[tid]);
-}?*/
 	}
 
 	/************************ INTERVAL  PROBE ************************/
