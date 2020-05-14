@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 15:03:56 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 15:05:45 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.5-alpha-14 $'
+VERSION='$Version: 4.5-beta-1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -770,32 +770,32 @@ ${VIEW_USER:+
 		printf("===\n");
 
 ${VIEW_CLIENT:+
-		print(@rd_client);
-		print(@wr_client);
+		printa(@rd_client);
+		printa(@wr_client);
 		trunc(@rd_client);
 		trunc(@wr_client);
 }
 /*?${VIEW_FILE:+
-		print(@rd_file);
-		print(@wr_file);
+		printa(@rd_file);
+		printa(@wr_file);
 		trunc(@rd_file);
 		trunc(@wr_file);
 }?*/
 ${VIEW_GROUP:+
-		print(@rd_group);
-		print(@wr_group);
+		printa(@rd_group);
+		printa(@wr_group);
 		trunc(@rd_group);
 		trunc(@wr_group);
 }
 /*?${VIEW_SERVER:+
-		print(@rd_server);
-		print(@wr_server);
+		printa(@rd_server);
+		printa(@wr_server);
 		trunc(@rd_server);
 		trunc(@wr_server);
 }?*/
 ${VIEW_USER:+
-		print(@rd_user);
-		print(@wr_user);
+		printa(@rd_user);
+		printa(@wr_user);
 		trunc(@rd_user);
 		trunc(@wr_user);
 }
