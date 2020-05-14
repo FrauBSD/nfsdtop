@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 16:53:52 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 16:57:25 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.5-beta-4 $'
+VERSION='$Version: 4.5-beta-5 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -62,9 +62,7 @@ COLOR=					# -a
 DEBUG=					# -d
 DEBUGGER=				# -D
 FILTER_CLIENT=				# -C ip
-#?FILTER_FILE=				# -F regex
 FILTER_GROUP=				# -G group
-#?FILTER_SERVER=				# -S ip
 FILTER_USER=				# -U user
 GROUP_MAP="$DEFAULT_GROUP_MAP"		# -P file
 INTERVAL=$DEFAULT_INTERVAL		# -i sec
@@ -76,9 +74,7 @@ PASSWD_MAP="$DEFAULT_PASSWD_MAP"	# -p file
 RAW_VIEW=				# -r
 SHOW_BYTES=				# -b
 VIEW_CLIENT=				# -c
-#?VIEW_FILE=				# -f
 VIEW_GROUP=				# -g
-#?VIEW_SERVER=				# -s
 VIEW_USER=				# -u (default)
 WIDE_VIEW=				# -w
 
@@ -88,7 +84,6 @@ WIDE_VIEW=				# -w
 CONS=1
 _FILTER_CLIENT=
 _FILTER_GROUP=
-#?_FILTER_SERVER=
 _FILTER_USER=
 INTERVAL_PROBE= # Calculated
 INTERVAL_SECONDS= # Raw value for awk
@@ -125,16 +120,12 @@ usage()
 	printf "$optfmt" "-c" "View read/write activity by client."
 	printf "$optfmt" "-D" "Enable debugger."
 	printf "$optfmt" "-d" "Debug. Print dtrace script and exit."
-#?	printf "$optfmt" "-F regex" "File filter. Implies \`-f'."
-#?	printf "$optfmt" "-f" \
-#?		"View read/write activity by file. Implies \`-w'."
 	printf "$optfmt" "-G group" "Group filter (name or id)."
 	printf "$optfmt" "-g" "View read/write activity by group."
 	printf "$optfmt" "-h" "Print usage statement and exit."
 	printf "$optfmt" "-I file" "IP map file. Default \`$DEFAULT_IP_MAP'."
 	printf "$optfmt" "-i sec" \
 		"Set interval seconds. Default \`$DEFAULT_INTERVAL'."
-#?	printf "$optfmt" "-J" "Output most JSON data. Same as \`-jcgsu'."
 	printf "$optfmt" "-J" "Output most JSON data. Same as \`-jcgu'."
 	printf "$optfmt" "-j" "Output JSON formatted data."
 	printf "$optfmt" "-N num" "Perform num samples and exit."
@@ -144,8 +135,6 @@ usage()
 	printf "$optfmt" "-p file" \
 		"User map file. Default \`$DEFAULT_PASSWD_MAP'."
 	printf "$optfmt" "-r" "Raw view. Do not format output of dtrace."
-#?	printf "$optfmt" "-S ip" "Server filtter (IPv4 only)."
-#?	printf "$optfmt" "-s" "View read/write activity by server."
 	printf "$optfmt" "-U user" "User filter (name or id)."
 	printf "$optfmt" "-u" "View read/write activity by user (default)."
 	printf "$optfmt" "-v" "Print version and exit."
@@ -224,7 +213,6 @@ resize()
 #
 # Process command-line options
 #
-#?while getopts abC:cDdF:fG:ghi:JjN:nP:p:rS:sU:uvw flag; do
 while getopts abC:cDdG:ghi:JjN:nP:p:rU:uvw flag; do
 	case "$flag" in
 	a) COLOR=1 ;;
@@ -233,8 +221,6 @@ while getopts abC:cDdG:ghi:JjN:nP:p:rU:uvw flag; do
 	c) VIEW=CLIENT VIEW_CLIENT=1 ;;
 	D) DEBUGGER=1 RAW_VIEW=1 ;;
 	d) DEBUG=1 RAW_VIEW=1 ;;
-#?	F) VIEW=FILE VIEW_FILE=1 WIDE_VIEW=1 FILTER_FILE="$OPTARG" ;;
-#?	f) VIEW=FILE VIEW_FILE=1 WIDE_VIEW=1 ;;
 	G) FILTER_GROUP="$OPTARG" ;;
 	g) VIEW=GROUP VIEW_GROUP=1 ;;
 	i) INTERVAL="$OPTARG" ;;
@@ -247,8 +233,6 @@ while getopts abC:cDdG:ghi:JjN:nP:p:rU:uvw flag; do
 	P) GROUP_MAP="$OPTARG" ;;
 	p) PASSWD_MAP="$OPTARG" ;;
 	r) RAW_VIEW=1 ;;
-#?	S) FILTER_SERVER="$OPTARG" ;;
-#?	s) VIEW=SERVER VIEW_SERVER=1 ;;
 	U) FILTER_USER="$OPTARG" ;;
 	u) VIEW=USER VIEW_USER=1 ;;
 	v) VERSION="${VERSION#*: }"
@@ -279,13 +263,8 @@ fi
 [ "$VIEW" ] || VIEW=USER VIEW_USER=1
 if [ ! "$OUTPUT_JSON" ]; then
 	case "$VIEW" in # ST: VIEWS
-#?	CLIENT) VIEW_FILE= VIEW_GROUP= VIEW_SERVER= VIEW_USER= ;;
 	CLIENT) VIEW_GROUP= VIEW_USER= ;;
-#?	FILE) VIEW_CLIENT= VIEW_GROUP= VIEW_SERVER= VIEW_USER= ;;
-#?	GROUP) VIEW_CLIENT= VIEW_FILE= VIEW_SERVER= VIEW_USER= ;;
 	GROUP) VIEW_CLIENT= VIEW_USER= ;;
-#?	SERVER) VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= VIEW_USER= ;;
-#?	USER) VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= VIEW_SERVER= ;;
 	USER) VIEW_CLIENT= VIEW_GROUP= ;;
 	esac
 fi
@@ -402,7 +381,6 @@ case "$FILTER_USER" in
 esac
 
 #
-#?# Process `-C ip'/`-S ip' option
 # Process `-C ip' option
 #
 case "$FILTER_CLIENT" in
@@ -444,45 +422,6 @@ case "$FILTER_CLIENT" in
 	checkip "$FILTER_CLIENT" # NOTREACHED if non-ip
 	;;
 esac
-#?case "$FILTER_SERVER" in
-#?"") : leave-empty ;;
-#?*[a-zA-Z]*) # Translate from name to IP
-#?	_FILTER_SERVER=$( awk \
-#?		-v sq="'" \
-#?		-v ip_map="$IP_MAP" \
-#?		-v host="$FILTER_SERVER" \
-#?	'BEGIN {
-#?		delete host2ip
-#?		while (getline < ip_map > 0) {
-#?			if (/^[[:space:]]*(#|$)/) continue
-#?			n = split($0, fields, /[[:space:]]+/)
-#?			host2ip[fields[2]] = fields[1]
-#?		}
-#?		close(ip_map)
-#?		if (host in host2ip) {
-#?			print host2ip[host]
-#?			exit 0
-#?		} else if (host !~ /\.$/ && (host ".") in host2ip) {
-#?			print host2ip[host "."]
-#?			exit 0
-#?		}
-#?		gsub(sq, "&\\\\&&", host)
-#?		cmd = sprintf("host -t A %s%s%s", sq, host, sq)
-#?		cmd | getline
-#?		close(cmd)
-#?		if ($NF !~ /NXDOMAIN/) {
-#?			print $NF
-#?			exit 0
-#?		}
-#?		exit 1
-#?	}' 2> /dev/null ) || die "Unknown host %s" "$FILTER_SERVER"
-#?	FILTER_SERVER="$_FILTER_SERVER"
-#?	checkip "$FILTER_SERVER" # NOTREACHED if non-ip
-#?	;;
-#?*)
-#?	checkip "$FILTER_SERVER" # NOTREACHED if non-ip
-#?	;;
-#?esac
 
 #
 # Get terminal size
@@ -605,11 +544,6 @@ ${FILTER_GROUP:+
 			this->filtered = 1;
 		\}
 }
-/*?${FILTER_SERVER:+
-		if (this->server_ip4 != "$FILTER_SERVER") {
-			this->filtered = 1;
-		\}
-}?*/
 ${FILTER_USER:+
 		if (this->uid != $FILTER_USER) {
 			this->filtered = 1;
@@ -624,25 +558,9 @@ ${VIEW_CLIENT:+
 				sum(this->bytes);
 }
 
-/*?${VIEW_FILE:+
-			\$file = @nfsd_read_filep[tid];
-			\$de = \$file->f_dentry;
-			\$n1 = \$de->d_name.name;
-			\$de = \$de->d_parent;
-			\$n2 = \$de->d_name.name;
-
-			@rd_file["@rd_file", str(\$n2), str(\$n1)] =
-				sum(this->bytes);
-}?*/
-
 ${VIEW_GROUP:+
 			@rd_group["@rd_group", this->gid] = sum(this->bytes);
 }
-
-/*?${VIEW_SERVER:+
-			@rd_server["@rd_server", this->server_ip4] =
-				sum(this->bytes);
-}?*/
 
 ${VIEW_USER:+
 			@rd_user["@rd_user", this->uid] = sum(this->bytes);
@@ -685,11 +603,6 @@ ${FILTER_GROUP:+
 			this->filtered = 1;
 		\}
 }
-/*?${FILTER_SERVER:+
-		if (this->server_ip4 != "$FILTER_SERVER") {
-			this->filtered = 1;
-		\}
-}?*/
 ${FILTER_USER:+
 		if (this->uid != $FILTER_USER) {
 			this->filtered = 1;
@@ -704,25 +617,9 @@ ${VIEW_CLIENT:+
 				sum(this->bytes);
 }
 
-/*?${VIEW_FILE:+
-			\$file = @nfsd_write_filep[tid];
-			\$de = \$file->f_dentry;
-			\$n1 = \$de->d_name.name;
-			\$de = \$de->d_parent;
-			\$n2 = \$de->d_name.name;
-
-			@wr_file["@wr_file", str(\$n2), str(\$n1)] =
-				sum(this->bytes);
-}?*/
-
 ${VIEW_GROUP:+
 			@wr_group["@wr_group", this->gid] = sum(this->bytes);
 }
-
-/*?${VIEW_SERVER:+
-			@wr_server["@wr_server", this->server_ip4] =
-				sum(\$bytes);
-}?*/
 
 ${VIEW_USER:+
 			@wr_user["@wr_user", this->uid] = sum(this->bytes);
@@ -742,24 +639,12 @@ ${VIEW_CLIENT:+
 		trunc(@rd_client);
 		trunc(@wr_client);
 }
-/*?${VIEW_FILE:+
-		printa(@rd_file);
-		printa(@wr_file);
-		trunc(@rd_file);
-		trunc(@wr_file);
-}?*/
 ${VIEW_GROUP:+
 		printa(@rd_group);
 		printa(@wr_group);
 		trunc(@rd_group);
 		trunc(@wr_group);
 }
-/*?${VIEW_SERVER:+
-		printa(@rd_server);
-		printa(@wr_server);
-		trunc(@rd_server);
-		trunc(@wr_server);
-}?*/
 ${VIEW_USER:+
 		printa(@rd_user);
 		printa(@wr_user);
@@ -779,12 +664,6 @@ ${VIEW_CLIENT:+
 		trunc(@rd_client);
 		trunc(@wr_client);
 }
-/*?${VIEW_FILE:+
-		trunc(@nfsd_read_filep);
-		trunc(@nfsd_write_filep);
-		trunc(@rd_file);
-		trunc(@wr_file);
-}?*/
 ${VIEW_GROUP:+
 		trunc(@rd_group);
 		trunc(@wr_group);
@@ -793,10 +672,6 @@ ${VIEW_USER:+
 		trunc(@rd_user);
 		trunc(@wr_user);
 }
-/*?${VIEW_SERVER:+
-		trunc(@rd_server);
-		trunc(@wr_server);
-}?*/
 	}
 
 	/********************************************************************\
