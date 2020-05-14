@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 16:31:04 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 16:53:52 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.5-beta-3 $'
+VERSION='$Version: 4.5-beta-4 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -194,17 +194,6 @@ checkip()
 	5) die "-C argument \`%s' too big octet" "$1" ;;
 	esac
 }
-
-#?atoi()
-#?{
-#?	local __addr="$1" __var_to_set="$2" __num=0
-#?	if isip "$__addr"; then
-#?		local IFS=.
-#?		set -- $__addr
-#?		__num=$(( ($1 << 24) + ($2 << 16) + ($3 << 8) + $4 ))
-#?	fi
-#?	eval $__var_to_set=$__num
-#?}
 
 #
 # ST: CALLS
@@ -450,11 +439,9 @@ case "$FILTER_CLIENT" in
 	}' 2> /dev/null ) || die "Unknown host %s" "$FILTER_CLIENT"
 	FILTER_CLIENT="$_FILTER_CLIENT"
 	checkip "$FILTER_CLIENT" # NOTREACHED if non-ip
-#?	atoi $FILTER_CLIENT FILTER_CLIENT
 	;;
 *)
 	checkip "$FILTER_CLIENT" # NOTREACHED if non-ip
-#?	atoi $FILTER_CLIENT FILTER_CLIENT
 	;;
 esac
 #?case "$FILTER_SERVER" in
@@ -491,11 +478,9 @@ esac
 #?	}' 2> /dev/null ) || die "Unknown host %s" "$FILTER_SERVER"
 #?	FILTER_SERVER="$_FILTER_SERVER"
 #?	checkip "$FILTER_SERVER" # NOTREACHED if non-ip
-#?#?	atoi $FILTER_SERVER FILTER_SERVER
 #?	;;
 #?*)
 #?	checkip "$FILTER_SERVER" # NOTREACHED if non-ip
-#?#?	atoi $FILTER_SERVER FILTER_SERVER
 #?	;;
 #?esac
 
@@ -1068,14 +1053,23 @@ EOF
 			bar_size, write_bar, bar_size, read_bar, read))
 	}
 
+	function _strftime(fmt, tm,        cmd)
+	{
+		if (tm == _strftime_tm && fmt == _strftime_fmt)
+			return _strftime_dt
+		(cmd = sprintf("date -r %u +\"%s\"", _strftime_tm = tm,
+			_strftime_fmt = fmt)) | getline _strftime_dt
+		close(cmd)
+		return _strftime_dt
+	}
+
 	function buffer_add_header(        prefix, suffix)
 	{
 		if (output_json) return
 		buffer_add(sprintf("Interval: %-*s %31s\n",
 			fmtsz - 9 - 2 - 31,
 			sprintf("%.3f", interval) "s",
-			""))
-#?			strftime("%c", tm = _systime())))
+			_strftime("%c", tm = _systime())))
 				#  9 = "Interval:"
 				#  2 = number of spaces
 				# 31 = %31s date
