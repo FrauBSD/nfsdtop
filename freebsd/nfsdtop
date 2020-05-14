@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 14:43:03 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 14:55:46 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.5-alpha-10 $'
+VERSION='$Version: 4.5-alpha-11 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -532,6 +532,10 @@ esac
 	/* -*- mode: dtrace-script; tab-width: 4 -*- ;; Emacs
 	 * vi: set ft=dtrace noet ts=4 sw=4 :: Vi/ViM
 	 */
+	/**************************** PRAGMAS ****************************/
+
+	#pragma D option quiet
+
 	/***************************** TYPES *****************************/
 
 	typedef struct sainfo {
