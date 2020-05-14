@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 11:59:48 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 13:09:12 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.5-alpha-6 $'
+VERSION='$Version: 4.5-alpha-7 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -532,20 +532,20 @@ esac
 	/* -*- mode: dtrace-script; tab-width: 4 -*- ;; Emacs
 	 * vi: set ft=dtrace noet ts=4 sw=4 :: Vi/ViM
 	 */
-	////////////////////////////////////////////////// TYPES
+	/***************************** TYPES *****************************/
 
 	typedef struct sainfo {
 		string addr;
 	} sainfo_t;
 
-	////////////////////////////////////////////////// GLOBALS
+	/**************************** GLOBALS ****************************/
 
 	inline int sa_data_size = 14;
 	inline char *sa_dummy_data = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
 
 	this szinfo_t	sainfo;
 
-	////////////////////////////////////////////////// MAP FUNCTIONS
+	/************************* MAP FUNCTIONS *************************/
 
 	inline string sa_data_addr[sa_family_t af, char data[sa_data_size]] =
 		af == AF_INET ? strjoin(
@@ -556,14 +556,14 @@ esac
 				lltostr(data[5] & 0xFF))
 		) : "";
 
-	// ST: OPS
+	/* ST: OPS */
 
 	inline string opfunc[string func] =
 		func == "nfsrvd_read" ?		"read" :
 		func == "nfsrvd_write" ?	"write" :
 		"";
 
-	////////////////////////////////////////////////// TYPE TRANSLATORS
+	/************************** TRANSLATORS **************************/
 
 	translator sainfo_t < struct sockaddr *SA > {
 		addr =SA = NULL ?
@@ -571,17 +571,17 @@ esac
 			sa_data_addr[SA->sa_family, SA->sa_data];
 	};
 
-	////////////////////////////////////////////////// BEGIN
+	/***************************** BEGIN *****************************/
 
 	BEGIN
 	{
-		printf("init|"); // Initialize post-processor
-		printf("===\n"); // Clear screen and draw header
+		printf("init|"); /* Initialize post-processor */
+		printf("===\n"); /* Clear screen and draw header */
 		printf("info|Sampling data for ${INTERVAL}s (\`-i sec')...\n");
 		printf("time|%d\n", walltimestamp / 1000000000);
 	}
 
-	////////////////////////////////////////////////// READ PROBES
+	/************************** READ PROBES **************************/
 
 	fbt:kernel:nfsrvd_read:entry
 	{
@@ -596,13 +596,13 @@ esac
 		@nfsd_read_server[tid] = \$num >> 16 & 0xFFFFFFFF;
 	}
 
-//?${VIEW_FILE:+
-//?	kprobe:nfsd_init_raparms
-//?	/@nfsd_read_rqstp[tid] != 0/
-//?	{
-//?		@nfsd_read_filep[tid] = (struct file *)arg0;
-//?	\}
-//?}
+/*?${VIEW_FILE:+
+	kprobe:nfsd_init_raparms
+	/@nfsd_read_rqstp[tid] != 0/
+	{
+		@nfsd_read_filep[tid] = (struct file *)arg0;
+	\}
+}?*/
 
 	fbt:kernel:nfsrvd_read:return
 	/@nfsd_read_rqstp[tid] != 0/
@@ -632,56 +632,56 @@ esac
 
 		\$filtered = 0;
 
-		// ST: FILTERS
+		/* ST: FILTERS */
 ${FILTER_CLIENT:+
 		if (\$client_ip4num != $FILTER_CLIENT) { \$filtered = 1; \}
 }
 ${FILTER_GROUP:+
 		if (\$gid != $FILTER_GROUP) { \$filtered = 1; \}
 }
-//?${FILTER_SERVER:+
-//?		if (\$server_ip4num != $FILTER_SERVER) { \$filtered = 1; \}
-//?}
+/*?${FILTER_SERVER:+
+		if (\$server_ip4num != $FILTER_SERVER) { \$filtered = 1; \}
+}?*/
 ${FILTER_USER:+
 		if (\$uid != $FILTER_USER) { \$filtered = 1; \}
 }
 
 		if (\$filtered == 0)
 		{
-			// ST: VIEWS TRACEDATA
+			/* ST: VIEWS TRACEDATA */
 ${VIEW_CLIENT:+
 			@rd_client[ntop(AF_INET, \$client_ip4)] = sum(\$bytes);
 }
 
-//?${VIEW_FILE:+
-//?			\$file = @nfsd_read_filep[tid];
-//?			\$de = \$file->f_dentry;
-//?			\$n1 = \$de->d_name.name;
-//?			\$de = \$de->d_parent;
-//?			\$n2 = \$de->d_name.name;
-//?
-//?			@rd_file[str(\$n2), str(\$n1)] = sum(\$bytes);
-//?}
+/*?${VIEW_FILE:+
+			\$file = @nfsd_read_filep[tid];
+			\$de = \$file->f_dentry;
+			\$n1 = \$de->d_name.name;
+			\$de = \$de->d_parent;
+			\$n2 = \$de->d_name.name;
+
+			@rd_file[str(\$n2), str(\$n1)] = sum(\$bytes);
+}?*/
 
 ${VIEW_GROUP:+
 			@rd_group[\$gid] = sum(\$bytes);
 }
 
-//?${VIEW_SERVER:+
-//?			@rd_server[ntop(AF_INET, \$server_ip4)] = sum(\$bytes);
-//?}
+/*?${VIEW_SERVER:+
+			@rd_server[ntop(AF_INET, \$server_ip4)] = sum(\$bytes);
+}?*/
 
 ${VIEW_USER:+
 			@rd_user[\$uid] = sum(\$bytes);
 }
 		}
 
-//?${VIEW_FILE:+
-//?		delete(@nfsd_read_filep[tid]);
-//?}
+/*?${VIEW_FILE:+
+		delete(@nfsd_read_filep[tid]);
+}?*/
 	}
 
-	////////////////////////////////////////////////// WRITE PROBES
+	/************************* WRITE  PROBES *************************/
 
 	fbt:kernel:nfsrvd_write:entry
 	{
@@ -696,13 +696,13 @@ ${VIEW_USER:+
 		@nfsd_write_server[tid] = \$num >> 16 & 0xFFFFFFFF;
 	}
 
-//?${VIEW_FILE:+
-//?	kprobe:nfsd_vfs_write
-//?	/@nfsd_write_rqstp[tid] != 0/
-//?	{
-//?		@nfsd_write_filep[tid] = (struct file *)arg2;
-//?	\}
-//?}
+/*?${VIEW_FILE:+
+	kprobe:nfsd_vfs_write
+	/@nfsd_write_rqstp[tid] != 0/
+	{
+		@nfsd_write_filep[tid] = (struct file *)arg2;
+	\}
+}?*/
 
 	fbt:kernel:nfsrvd_write:return
 	/@nfsd_write_rqstp[tid] != 0/
@@ -732,56 +732,56 @@ ${VIEW_USER:+
 
 		\$filtered = 0;
 
-		// ST: FILTERS
+		/* ST: FILTERS */
 ${FILTER_CLIENT:+
 		if (\$client_ip4num != $FILTER_CLIENT) { \$filtered = 1; \}
 }
 ${FILTER_GROUP:+
 		if (\$gid != $FILTER_GROUP) { \$filtered = 1; \}
 }
-//?${FILTER_SERVER:+
-//?		if (\$server_ip4num != $FILTER_SERVER) { \$filtered = 1; \}
-//?}
+/*?${FILTER_SERVER:+
+		if (\$server_ip4num != $FILTER_SERVER) { \$filtered = 1; \}
+}?*/
 ${FILTER_USER:+
 		if (\$uid != $FILTER_USER) { \$filtered = 1; \}
 }
 
 		if (\$filtered == 0)
 		{
-			// ST: VIEWS TRACEDATA
+			/* ST: VIEWS TRACEDATA */
 ${VIEW_CLIENT:+
 			@wr_client[ntop(AF_INET, \$client_ip4)] = sum(\$bytes);
 }
 
-//?${VIEW_FILE:+
-//?			\$file = @nfsd_write_filep[tid];
-//?			\$de = \$file->f_dentry;
-//?			\$n1 = \$de->d_name.name;
-//?			\$de = \$de->d_parent;
-//?			\$n2 = \$de->d_name.name;
-//?
-//?			@wr_file[str(\$n2), str(\$n1)] = sum(\$bytes);
-//?}
+/*?${VIEW_FILE:+
+			\$file = @nfsd_write_filep[tid];
+			\$de = \$file->f_dentry;
+			\$n1 = \$de->d_name.name;
+			\$de = \$de->d_parent;
+			\$n2 = \$de->d_name.name;
+
+			@wr_file[str(\$n2), str(\$n1)] = sum(\$bytes);
+}?*/
 
 ${VIEW_GROUP:+
 			@wr_group[\$gid] = sum(\$bytes);
 }
 
-//?${VIEW_SERVER:+
-//?			@wr_server[ntop(AF_INET, \$server_ip4)] = sum(\$bytes);
-//?}
+/*?${VIEW_SERVER:+
+			@wr_server[ntop(AF_INET, \$server_ip4)] = sum(\$bytes);
+}?*/
 
 ${VIEW_USER:+
 			@wr_user[\$uid] = sum(\$bytes);
 }
 		}
 
-//?${VIEW_FILE:+
-//?		delete(@nfsd_write_filep[tid]);
-//?}
+/*?${VIEW_FILE:+
+		delete(@nfsd_write_filep[tid]);
+}?*/
 	}
 
-	////////////////////////////////////////////////// INTERVAL PROBE
+	/************************ INTERVAL  PROBE ************************/
 
 	$INTERVAL_PROBE
 	{
@@ -793,24 +793,24 @@ ${VIEW_CLIENT:+
 		clear(@rd_client);
 		clear(@wr_client);
 }
-//?${VIEW_FILE:+
-//?		print(@rd_file);
-//?		print(@wr_file);
-//?		clear(@rd_file);
-//?		clear(@wr_file);
-//?}
+/*?${VIEW_FILE:+
+		print(@rd_file);
+		print(@wr_file);
+		clear(@rd_file);
+		clear(@wr_file);
+}?*/
 ${VIEW_GROUP:+
 		print(@rd_group);
 		print(@wr_group);
 		clear(@rd_group);
 		clear(@wr_group);
 }
-//?${VIEW_SERVER:+
-//?		print(@rd_server);
-//?		print(@wr_server);
-//?		clear(@rd_server);
-//?		clear(@wr_server);
-//?}
+/*?${VIEW_SERVER:+
+		print(@rd_server);
+		print(@wr_server);
+		clear(@rd_server);
+		clear(@wr_server);
+}?*/
 ${VIEW_USER:+
 		print(@rd_user);
 		print(@wr_user);
@@ -822,7 +822,7 @@ ${VIEW_USER:+
 		printf("---\n");
 	}
 
-	////////////////////////////////////////////////// END
+	/****************************** END ******************************/
 
 	END
 	{
@@ -830,12 +830,12 @@ ${VIEW_CLIENT:+
 		clear(@rd_client);
 		clear(@wr_client);
 }
-//?${VIEW_FILE:+
-//?		clear(@nfsd_read_filep);
-//?		clear(@nfsd_write_filep);
-//?		clear(@rd_file);
-//?		clear(@wr_file);
-//?}
+/*?${VIEW_FILE:+
+		clear(@nfsd_read_filep);
+		clear(@nfsd_write_filep);
+		clear(@rd_file);
+		clear(@wr_file);
+}?*/
 ${VIEW_GROUP:+
 		clear(@rd_group);
 		clear(@wr_group);
@@ -844,10 +844,10 @@ ${VIEW_USER:+
 		clear(@rd_user);
 		clear(@wr_user);
 }
-//?${VIEW_SERVER:+
-//?		clear(@rd_server);
-//?		clear(@wr_server);
-//?}
+/*?${VIEW_SERVER:+
+		clear(@rd_server);
+		clear(@wr_server);
+}?*/
 
 		clear(@nfsd_read_client);
 		clear(@nfsd_read_countp);
@@ -859,9 +859,9 @@ ${VIEW_USER:+
 		clear(@nfsd_write_server);
 	}
 
-	//////////////////////////////////////////////////////////////////////
-	// END
-	//////////////////////////////////////////////////////////////////////
+	/********************************************************************\
+	 * END
+	 ********************************************************************/
 EOF
 	pid=$!
 
@@ -1203,7 +1203,8 @@ EOF
 		if (map_view == "file") {
 			gsub(/, /, "/", map_key)
 			gsub("//+", "/", map_key)
-			if (filter_file != "" && map_key !~ filter_file) return 0
+			if (filter_file != "" && map_key !~ filter_file)
+				return 0
 		}
 
 		#
