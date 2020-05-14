@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 11:54:44 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 11:59:48 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.5-alpha-5 $'
+VERSION='$Version: 4.5-alpha-6 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -583,7 +583,7 @@ esac
 
 	////////////////////////////////////////////////// READ PROBES
 
-	kprobe:nfsd_read
+	fbt:kernel:nfsrvd_read:entry
 	{
 		\$rqstp = (struct svc_rqst *)arg0;
 		@nfsd_read_rqstp[tid] = \$rqstp;
@@ -604,7 +604,7 @@ esac
 //?	\}
 //?}
 
-	kretprobe:nfsd_read
+	fbt:kernel:nfsrvd_read:return
 	/@nfsd_read_rqstp[tid] != 0/
 	{
 		\$rqstp = @nfsd_read_rqstp[tid];
@@ -683,7 +683,7 @@ ${VIEW_USER:+
 
 	////////////////////////////////////////////////// WRITE PROBES
 
-	kprobe:nfsd_write
+	fbt:kernel:nfsrvd_write:entry
 	{
 		\$rqstp = (struct svc_rqst *)arg0;
 		@nfsd_write_rqstp[tid] = \$rqstp;
@@ -704,7 +704,7 @@ ${VIEW_USER:+
 //?	\}
 //?}
 
-	kretprobe:nfsd_write
+	fbt:kernel:nfsrvd_write:return
 	/@nfsd_write_rqstp[tid] != 0/
 	{
 		\$rqstp = @nfsd_write_rqstp[tid];
