@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 13:10:26 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 14:40:46 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.5-alpha-8 $'
+VERSION='$Version: 4.5-alpha-9 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -585,15 +585,13 @@ esac
 
 	fbt:kernel:nfsrvd_read:entry
 	{
-		\$rqstp = (struct svc_rqst *)arg0;
-		@nfsd_read_rqstp[tid] = \$rqstp;
-		@nfsd_read_countp[tid] = arg5;
-		\$data = (int64 *)\$rqstp->rq_addr.__data;
-		\$num = (int64)*\$data;
-		@nfsd_read_client[tid] = \$num >> 16 & 0xFFFFFFFF;
-		\$data = (int64 *)\$rqstp->rq_daddr.__data;
-		\$num = (int64)*\$data;
-		@nfsd_read_server[tid] = \$num >> 16 & 0xFFFFFFFF;
+		this->nfsd_read_nd = (struct nfsrv_descript *)args[0];
+		this->nfsd_read_cred = this->nfsd_read_nd == NULL ? NULL :
+			this->nfsd_read_nd->nd_cred;
+		this->nfsd_read_nam = this->nfsd_read_nd == NULL ? NULL :
+			this->nfsd_read_nd->nd_nam;
+		this->nfsd_read_info = xlate <sainfo_t>
+			((struct sockaddr *)this->nfsd_read_nam);
 	}
 
 /*?${VIEW_FILE:+
@@ -604,49 +602,40 @@ esac
 	\}
 }?*/
 
-	fbt:kernel:nfsrvd_read:return
-	/@nfsd_read_rqstp[tid] != 0/
+	fbt:kernel:nfsvno_read:entry
+	/this->nfsd_read_nd != NULL/
 	{
-		\$rqstp = @nfsd_read_rqstp[tid];
-		\$uid = \$rqstp->rq_cred.cr_uid.val;
-		\$gid = \$rqstp->rq_cred.cr_gid.val;
-		\$countp = @nfsd_read_countp[tid];
-		\$bytes = *\$countp;
+		this->uid = this->nfsd_read_cred->cr_ruid;
+		this->gid = this->nfsd_read_cred->cr_rgid;
+		this->bytes = args[2];
 
-		\$client_ip4 = @nfsd_read_client[tid];
-		\$client_ip4num = (uint32)(\$client_ip4 >> 24 |
-			(\$client_ip4 >> 16 & 0xFF) << 8 |
-			(\$client_ip4 >> 8 & 0xFF) << 16 |
-			(\$client_ip4 & 0xFF) << 24);
+		this->client_ip4 = this->nfsd_read_info.addr;
 
-		\$server_ip4 = @nfsd_read_server[tid];
-		\$server_ip4num = (uint32)(\$server_ip4 >> 24 |
-			(\$server_ip4 >> 16 & 0xFF) << 8 |
-			(\$server_ip4 >> 8 & 0xFF) << 16 |
-			(\$server_ip4 & 0xFF) << 24);
-
-		delete(@nfsd_read_client[tid]);
-		delete(@nfsd_read_countp[tid]);
-		delete(@nfsd_read_rqstp[tid]);
-		delete(@nfsd_read_server[tid]);
-
-		\$filtered = 0;
+		this->filtered = 0;
 
 		/* ST: FILTERS */
 ${FILTER_CLIENT:+
-		if (\$client_ip4num != $FILTER_CLIENT) { \$filtered = 1; \}
+		if (this->client_ip4 != "$FILTER_CLIENT") {
+			this->filtered = 1;
+		\}
 }
 ${FILTER_GROUP:+
-		if (\$gid != $FILTER_GROUP) { \$filtered = 1; \}
+		if (this->gid != $FILTER_GROUP) {
+			this->filtered = 1;
+		\}
 }
 /*?${FILTER_SERVER:+
-		if (\$server_ip4num != $FILTER_SERVER) { \$filtered = 1; \}
+		if (this->server_ip4 != "$FILTER_SERVER") {
+			this->filtered = 1;
+		\}
 }?*/
 ${FILTER_USER:+
-		if (\$uid != $FILTER_USER) { \$filtered = 1; \}
+		if (this->uid != $FILTER_USER) {
+			this->filtered = 1;
+		\}
 }
 
-		if (\$filtered == 0)
+		if (this->filtered == 0)
 		{
 			/* ST: VIEWS TRACEDATA */
 ${VIEW_CLIENT:+
@@ -685,15 +674,13 @@ ${VIEW_USER:+
 
 	fbt:kernel:nfsrvd_write:entry
 	{
-		\$rqstp = (struct svc_rqst *)arg0;
-		@nfsd_write_rqstp[tid] = \$rqstp;
-		@nfsd_write_countp[tid] = arg5;
-		\$data = (int64 *)\$rqstp->rq_addr.__data;
-		\$num = (int64)*\$data;
-		@nfsd_write_client[tid] = \$num >> 16 & 0xFFFFFFFF;
-		\$data = (int64 *)\$rqstp->rq_daddr.__data;
-		\$num = (int64)*\$data;
-		@nfsd_write_server[tid] = \$num >> 16 & 0xFFFFFFFF;
+		this->nfsd_write_nd = (struct nfsrv_descript *)args[0];
+		this->nfsd_write_cred = this->nfsd_write_nd == NULL ? NULL :
+			this->nfsd_write_nd->nd_cred;
+		this->nfsd_write_nam = this->nfsd_write_nd == NULL ? NULL :
+			this->nfsd_write_nd->nd_nam;
+		this->nfsd_write_info = xlate <sainfo_t>
+			((struct sockaddr *)this->nfsd_write_nam);
 	}
 
 /*?${VIEW_FILE:+
@@ -704,49 +691,40 @@ ${VIEW_USER:+
 	\}
 }?*/
 
-	fbt:kernel:nfsrvd_write:return
-	/@nfsd_write_rqstp[tid] != 0/
+	fbt:kernel:nfsvno_write:entry
+	/this->nfsd_write_nd != NULL/
 	{
-		\$rqstp = @nfsd_write_rqstp[tid];
-		\$uid = \$rqstp->rq_cred.cr_uid.val;
-		\$gid = \$rqstp->rq_cred.cr_gid.val;
-		\$countp = @nfsd_write_countp[tid];
-		\$bytes = *\$countp;
+		this->uid = this->nfsd_write_cred->cr_ruid;
+		this->gid = this->nfsd_write_cred->cr_rgid;
+		this->bytes = args[2];
 
-		\$client_ip4 = @nfsd_write_client[tid];
-		\$client_ip4num = (uint32)(\$client_ip4 >> 24 |
-			(\$client_ip4 >> 16 & 0xFF) << 8 |
-			(\$client_ip4 >> 8 & 0xFF) << 16 |
-			(\$client_ip4 & 0xFF) << 24);
+		this->client_ip4 = this->nfsd_write_info.addr;
 
-		\$server_ip4 = @nfsd_write_server[tid];
-		\$server_ip4num = (uint32)(\$server_ip4 >> 24 |
-			(\$server_ip4 >> 16 & 0xFF) << 8 |
-			(\$server_ip4 >> 8 & 0xFF) << 16 |
-			(\$server_ip4 & 0xFF) << 24);
-
-		delete(@nfsd_write_client[tid]);
-		delete(@nfsd_write_countp[tid]);
-		delete(@nfsd_write_rqstp[tid]);
-		delete(@nfsd_write_server[tid]);
-
-		\$filtered = 0;
+		this->filtered = 0;
 
 		/* ST: FILTERS */
 ${FILTER_CLIENT:+
-		if (\$client_ip4num != $FILTER_CLIENT) { \$filtered = 1; \}
+		if (this->client_ip4 != "$FILTER_CLIENT") {
+			this->filtered = 1;
+		\}
 }
 ${FILTER_GROUP:+
-		if (\$gid != $FILTER_GROUP) { \$filtered = 1; \}
+		if (this->gid != $FILTER_GROUP) {
+			this->filtered = 1;
+		\}
 }
 /*?${FILTER_SERVER:+
-		if (\$server_ip4num != $FILTER_SERVER) { \$filtered = 1; \}
+		if (this->server_ip4 != "$FILTER_SERVER") {
+			this->filtered = 1;
+		\}
 }?*/
 ${FILTER_USER:+
-		if (\$uid != $FILTER_USER) { \$filtered = 1; \}
+		if (this->uid != $FILTER_USER) {
+			this->filtered = 1;
+		\}
 }
 
-		if (\$filtered == 0)
+		if (this->filtered == 0)
 		{
 			/* ST: VIEWS TRACEDATA */
 ${VIEW_CLIENT:+
