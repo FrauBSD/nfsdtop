@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 14:57:20 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 14:59:11 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.5-alpha-12 $'
+VERSION='$Version: 4.5-alpha-13 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -772,32 +772,32 @@ ${VIEW_USER:+
 ${VIEW_CLIENT:+
 		print(@rd_client);
 		print(@wr_client);
-		clear(@rd_client);
-		clear(@wr_client);
+		trunc(@rd_client);
+		trunc(@wr_client);
 }
 /*?${VIEW_FILE:+
 		print(@rd_file);
 		print(@wr_file);
-		clear(@rd_file);
-		clear(@wr_file);
+		trunc(@rd_file);
+		trunc(@wr_file);
 }?*/
 ${VIEW_GROUP:+
 		print(@rd_group);
 		print(@wr_group);
-		clear(@rd_group);
-		clear(@wr_group);
+		trunc(@rd_group);
+		trunc(@wr_group);
 }
 /*?${VIEW_SERVER:+
 		print(@rd_server);
 		print(@wr_server);
-		clear(@rd_server);
-		clear(@wr_server);
+		trunc(@rd_server);
+		trunc(@wr_server);
 }?*/
 ${VIEW_USER:+
 		print(@rd_user);
 		print(@wr_user);
-		clear(@rd_user);
-		clear(@wr_user);
+		trunc(@rd_user);
+		trunc(@wr_user);
 }
 
 		printf("time|%d\n", walltimestamp / 1000000000);
@@ -809,26 +809,26 @@ ${VIEW_USER:+
 	END
 	{
 ${VIEW_CLIENT:+
-		clear(@rd_client);
-		clear(@wr_client);
+		trunc(@rd_client);
+		trunc(@wr_client);
 }
 /*?${VIEW_FILE:+
-		clear(@nfsd_read_filep);
-		clear(@nfsd_write_filep);
-		clear(@rd_file);
-		clear(@wr_file);
+		trunc(@nfsd_read_filep);
+		trunc(@nfsd_write_filep);
+		trunc(@rd_file);
+		trunc(@wr_file);
 }?*/
 ${VIEW_GROUP:+
-		clear(@rd_group);
-		clear(@wr_group);
+		trunc(@rd_group);
+		trunc(@wr_group);
 }
 ${VIEW_USER:+
-		clear(@rd_user);
-		clear(@wr_user);
+		trunc(@rd_user);
+		trunc(@wr_user);
 }
 /*?${VIEW_SERVER:+
-		clear(@rd_server);
-		clear(@wr_server);
+		trunc(@rd_server);
+		trunc(@wr_server);
 }?*/
 	}
 
