@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 14:59:11 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 15:03:56 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.5-alpha-13 $'
+VERSION='$Version: 4.5-alpha-14 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -643,7 +643,7 @@ ${FILTER_USER:+
 		{
 			/* ST: VIEWS TRACEDATA */
 ${VIEW_CLIENT:+
-			@rd_client[ntop(AF_INET, \$client_ip4)] = sum(\$bytes);
+			@rd_client[this->client_ip4] = sum(this->bytes);
 }
 
 /*?${VIEW_FILE:+
@@ -653,19 +653,19 @@ ${VIEW_CLIENT:+
 			\$de = \$de->d_parent;
 			\$n2 = \$de->d_name.name;
 
-			@rd_file[str(\$n2), str(\$n1)] = sum(\$bytes);
+			@rd_file[str(\$n2), str(\$n1)] = sum(this->bytes);
 }?*/
 
 ${VIEW_GROUP:+
-			@rd_group[\$gid] = sum(\$bytes);
+			@rd_group[this->gid] = sum(this->bytes);
 }
 
 /*?${VIEW_SERVER:+
-			@rd_server[ntop(AF_INET, \$server_ip4)] = sum(\$bytes);
+			@rd_server[this->server_ip4] = sum(this->bytes);
 }?*/
 
 ${VIEW_USER:+
-			@rd_user[\$uid] = sum(\$bytes);
+			@rd_user[this->uid] = sum(this->bytes);
 }
 		}
 
@@ -732,7 +732,7 @@ ${FILTER_USER:+
 		{
 			/* ST: VIEWS TRACEDATA */
 ${VIEW_CLIENT:+
-			@wr_client[ntop(AF_INET, \$client_ip4)] = sum(\$bytes);
+			@wr_client[this->client_ip4] = sum(this->bytes);
 }
 
 /*?${VIEW_FILE:+
@@ -742,19 +742,19 @@ ${VIEW_CLIENT:+
 			\$de = \$de->d_parent;
 			\$n2 = \$de->d_name.name;
 
-			@wr_file[str(\$n2), str(\$n1)] = sum(\$bytes);
+			@wr_file[str(\$n2), str(\$n1)] = sum(this->bytes);
 }?*/
 
 ${VIEW_GROUP:+
-			@wr_group[\$gid] = sum(\$bytes);
+			@wr_group[this->gid] = sum(this->bytes);
 }
 
 /*?${VIEW_SERVER:+
-			@wr_server[ntop(AF_INET, \$server_ip4)] = sum(\$bytes);
+			@wr_server[this->server_ip4] = sum(\$bytes);
 }?*/
 
 ${VIEW_USER:+
-			@wr_user[\$uid] = sum(\$bytes);
+			@wr_user[this->uid] = sum(this->bytes);
 }
 		}
 
