@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 11:50:27 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 11:54:44 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.5-alpha-4 $'
+VERSION='$Version: 4.5-alpha-5 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -596,13 +596,13 @@ esac
 		@nfsd_read_server[tid] = \$num >> 16 & 0xFFFFFFFF;
 	}
 
-${VIEW_FILE:+
-	kprobe:nfsd_init_raparms
-	/@nfsd_read_rqstp[tid] != 0/
-	{
-		@nfsd_read_filep[tid] = (struct file *)arg0;
-	\}
-}
+//?${VIEW_FILE:+
+//?	kprobe:nfsd_init_raparms
+//?	/@nfsd_read_rqstp[tid] != 0/
+//?	{
+//?		@nfsd_read_filep[tid] = (struct file *)arg0;
+//?	\}
+//?}
 
 	kretprobe:nfsd_read
 	/@nfsd_read_rqstp[tid] != 0/
@@ -639,9 +639,9 @@ ${FILTER_CLIENT:+
 ${FILTER_GROUP:+
 		if (\$gid != $FILTER_GROUP) { \$filtered = 1; \}
 }
-${FILTER_SERVER:+
-		if (\$server_ip4num != $FILTER_SERVER) { \$filtered = 1; \}
-}
+//?${FILTER_SERVER:+
+//?		if (\$server_ip4num != $FILTER_SERVER) { \$filtered = 1; \}
+//?}
 ${FILTER_USER:+
 		if (\$uid != $FILTER_USER) { \$filtered = 1; \}
 }
@@ -653,32 +653,32 @@ ${VIEW_CLIENT:+
 			@rd_client[ntop(AF_INET, \$client_ip4)] = sum(\$bytes);
 }
 
-${VIEW_FILE:+
-			\$file = @nfsd_read_filep[tid];
-			\$de = \$file->f_dentry;
-			\$n1 = \$de->d_name.name;
-			\$de = \$de->d_parent;
-			\$n2 = \$de->d_name.name;
-
-			@rd_file[str(\$n2), str(\$n1)] = sum(\$bytes);
-}
+//?${VIEW_FILE:+
+//?			\$file = @nfsd_read_filep[tid];
+//?			\$de = \$file->f_dentry;
+//?			\$n1 = \$de->d_name.name;
+//?			\$de = \$de->d_parent;
+//?			\$n2 = \$de->d_name.name;
+//?
+//?			@rd_file[str(\$n2), str(\$n1)] = sum(\$bytes);
+//?}
 
 ${VIEW_GROUP:+
 			@rd_group[\$gid] = sum(\$bytes);
 }
 
-${VIEW_SERVER:+
-			@rd_server[ntop(AF_INET, \$server_ip4)] = sum(\$bytes);
-}
+//?${VIEW_SERVER:+
+//?			@rd_server[ntop(AF_INET, \$server_ip4)] = sum(\$bytes);
+//?}
 
 ${VIEW_USER:+
 			@rd_user[\$uid] = sum(\$bytes);
 }
 		}
 
-${VIEW_FILE:+
-		delete(@nfsd_read_filep[tid]);
-}
+//?${VIEW_FILE:+
+//?		delete(@nfsd_read_filep[tid]);
+//?}
 	}
 
 	////////////////////////////////////////////////// WRITE PROBES
@@ -696,13 +696,13 @@ ${VIEW_FILE:+
 		@nfsd_write_server[tid] = \$num >> 16 & 0xFFFFFFFF;
 	}
 
-${VIEW_FILE:+
-	kprobe:nfsd_vfs_write
-	/@nfsd_write_rqstp[tid] != 0/
-	{
-		@nfsd_write_filep[tid] = (struct file *)arg2;
-	\}
-}
+//?${VIEW_FILE:+
+//?	kprobe:nfsd_vfs_write
+//?	/@nfsd_write_rqstp[tid] != 0/
+//?	{
+//?		@nfsd_write_filep[tid] = (struct file *)arg2;
+//?	\}
+//?}
 
 	kretprobe:nfsd_write
 	/@nfsd_write_rqstp[tid] != 0/
@@ -739,9 +739,9 @@ ${FILTER_CLIENT:+
 ${FILTER_GROUP:+
 		if (\$gid != $FILTER_GROUP) { \$filtered = 1; \}
 }
-${FILTER_SERVER:+
-		if (\$server_ip4num != $FILTER_SERVER) { \$filtered = 1; \}
-}
+//?${FILTER_SERVER:+
+//?		if (\$server_ip4num != $FILTER_SERVER) { \$filtered = 1; \}
+//?}
 ${FILTER_USER:+
 		if (\$uid != $FILTER_USER) { \$filtered = 1; \}
 }
@@ -753,32 +753,32 @@ ${VIEW_CLIENT:+
 			@wr_client[ntop(AF_INET, \$client_ip4)] = sum(\$bytes);
 }
 
-${VIEW_FILE:+
-			\$file = @nfsd_write_filep[tid];
-			\$de = \$file->f_dentry;
-			\$n1 = \$de->d_name.name;
-			\$de = \$de->d_parent;
-			\$n2 = \$de->d_name.name;
-
-			@wr_file[str(\$n2), str(\$n1)] = sum(\$bytes);
-}
+//?${VIEW_FILE:+
+//?			\$file = @nfsd_write_filep[tid];
+//?			\$de = \$file->f_dentry;
+//?			\$n1 = \$de->d_name.name;
+//?			\$de = \$de->d_parent;
+//?			\$n2 = \$de->d_name.name;
+//?
+//?			@wr_file[str(\$n2), str(\$n1)] = sum(\$bytes);
+//?}
 
 ${VIEW_GROUP:+
 			@wr_group[\$gid] = sum(\$bytes);
 }
 
-${VIEW_SERVER:+
-			@wr_server[ntop(AF_INET, \$server_ip4)] = sum(\$bytes);
-}
+//?${VIEW_SERVER:+
+//?			@wr_server[ntop(AF_INET, \$server_ip4)] = sum(\$bytes);
+//?}
 
 ${VIEW_USER:+
 			@wr_user[\$uid] = sum(\$bytes);
 }
 		}
 
-${VIEW_FILE:+
-		delete(@nfsd_write_filep[tid]);
-}
+//?${VIEW_FILE:+
+//?		delete(@nfsd_write_filep[tid]);
+//?}
 	}
 
 	////////////////////////////////////////////////// INTERVAL PROBE
@@ -793,24 +793,24 @@ ${VIEW_CLIENT:+
 		clear(@rd_client);
 		clear(@wr_client);
 }
-${VIEW_FILE:+
-		print(@rd_file);
-		print(@wr_file);
-		clear(@rd_file);
-		clear(@wr_file);
-}
+//?${VIEW_FILE:+
+//?		print(@rd_file);
+//?		print(@wr_file);
+//?		clear(@rd_file);
+//?		clear(@wr_file);
+//?}
 ${VIEW_GROUP:+
 		print(@rd_group);
 		print(@wr_group);
 		clear(@rd_group);
 		clear(@wr_group);
 }
-${VIEW_SERVER:+
-		print(@rd_server);
-		print(@wr_server);
-		clear(@rd_server);
-		clear(@wr_server);
-}
+//?${VIEW_SERVER:+
+//?		print(@rd_server);
+//?		print(@wr_server);
+//?		clear(@rd_server);
+//?		clear(@wr_server);
+//?}
 ${VIEW_USER:+
 		print(@rd_user);
 		print(@wr_user);
@@ -830,12 +830,12 @@ ${VIEW_CLIENT:+
 		clear(@rd_client);
 		clear(@wr_client);
 }
-${VIEW_FILE:+
-		clear(@nfsd_read_filep);
-		clear(@nfsd_write_filep);
-		clear(@rd_file);
-		clear(@wr_file);
-}
+//?${VIEW_FILE:+
+//?		clear(@nfsd_read_filep);
+//?		clear(@nfsd_write_filep);
+//?		clear(@rd_file);
+//?		clear(@wr_file);
+//?}
 ${VIEW_GROUP:+
 		clear(@rd_group);
 		clear(@wr_group);
@@ -844,10 +844,10 @@ ${VIEW_USER:+
 		clear(@rd_user);
 		clear(@wr_user);
 }
-${VIEW_SERVER:+
-		clear(@rd_server);
-		clear(@wr_server);
-}
+//?${VIEW_SERVER:+
+//?		clear(@rd_server);
+//?		clear(@wr_server);
+//?}
 
 		clear(@nfsd_read_client);
 		clear(@nfsd_read_countp);
