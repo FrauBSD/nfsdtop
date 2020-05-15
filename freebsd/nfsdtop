@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 18:11:32 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 21:05:26 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.5 $'
+VERSION='$Version: 4.5.1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -531,41 +531,37 @@ esac
 
 		this->client_ip4 = this->nfsd_read_info.addr;
 
-		this->filtered = 0;
-
 		/* ST: FILTERS */
-${FILTER_CLIENT:+
-		if (this->client_ip4 != "$FILTER_CLIENT") {
-			this->filtered = 1;
-		\}
-}
-${FILTER_GROUP:+
-		if (this->gid != $FILTER_GROUP) {
-			this->filtered = 1;
-		\}
-}
-${FILTER_USER:+
-		if (this->uid != $FILTER_USER) {
-			this->filtered = 1;
-		\}
-}
 
-		if (this->filtered == 0)
-		{
-			/* ST: VIEWS TRACEDATA */
+		this->nfsd_read_unfiltered = ${FILTER_CLIENT:+
+			this->client_ip4 == "$FILTER_CLIENT" ?
+			}${FILTER_GROUP:+
+			this->gid == $FILTER_GROUP ?
+			}${FILTER_USER:+
+			this->uid == $FILTER_USER ?
+			}
+			1${FILTER_CLIENT:+
+			: 0}${FILTER_GROUP:+
+			: 0}${FILTER_USER:+
+			: 0};
+	}
+
+	fbt:kernel:nfsvno_read:entry
+	/this->nfsd_read_nd != NULL && this->nfsd_read_unfiltered/
+	{
+		/* ST: VIEWS TRACEDATA */
 ${VIEW_CLIENT:+
-			@rd_client["@rd_client", this->client_ip4] =
-				sum(this->bytes);
+		@rd_client["@rd_client", this->client_ip4] =
+			sum(this->bytes);
 }
 
 ${VIEW_GROUP:+
-			@rd_group["@rd_group", this->gid] = sum(this->bytes);
+		@rd_group["@rd_group", this->gid] = sum(this->bytes);
 }
 
 ${VIEW_USER:+
-			@rd_user["@rd_user", this->uid] = sum(this->bytes);
+		@rd_user["@rd_user", this->uid] = sum(this->bytes);
 }
-		}
 	}
 
 	/************************* WRITE  PROBES *************************/
@@ -593,38 +589,36 @@ ${VIEW_USER:+
 		this->filtered = 0;
 
 		/* ST: FILTERS */
-${FILTER_CLIENT:+
-		if (this->client_ip4 != "$FILTER_CLIENT") {
-			this->filtered = 1;
-		\}
-}
-${FILTER_GROUP:+
-		if (this->gid != $FILTER_GROUP) {
-			this->filtered = 1;
-		\}
-}
-${FILTER_USER:+
-		if (this->uid != $FILTER_USER) {
-			this->filtered = 1;
-		\}
-}
 
-		if (this->filtered == 0)
-		{
-			/* ST: VIEWS TRACEDATA */
+		this->nfsd_write_unfiltered = ${FILTER_CLIENT:+
+			this->client_ip4 == "$FILTER_CLIENT" ?
+			}${FILTER_GROUP:+
+			this->gid == $FILTER_GROUP ?
+			}${FILTER_USER:+
+			this->uid == $FILTER_USER ?
+			}
+			1${FILTER_CLIENT:+
+			: 0}${FILTER_GROUP:+
+			: 0}${FILTER_USER:+
+			: 0};
+	}
+
+	fbt:kernel:nfsvno_write:entry
+	/this->nfsd_write_nd != NULL && this->nfsd_write_unfiltered/
+	{
+		/* ST: VIEWS TRACEDATA */
 ${VIEW_CLIENT:+
-			@wr_client["@wr_client", this->client_ip4] =
-				sum(this->bytes);
+		@wr_client["@wr_client", this->client_ip4] =
+			sum(this->bytes);
 }
 
 ${VIEW_GROUP:+
-			@wr_group["@wr_group", this->gid] = sum(this->bytes);
+		@wr_group["@wr_group", this->gid] = sum(this->bytes);
 }
 
 ${VIEW_USER:+
-			@wr_user["@wr_user", this->uid] = sum(this->bytes);
+		@wr_user["@wr_user", this->uid] = sum(this->bytes);
 }
-		}
 	}
 
 	/************************ INTERVAL  PROBE ************************/
