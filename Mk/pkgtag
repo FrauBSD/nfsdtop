@@ -5,7 +5,7 @@
 #
 # $Title: Script for getting the package tag from a package name $
 # $Copyright: 1999-2017 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/Mk/pkgtag 2020-05-14 17:55:22 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/Mk/pkgtag 2020-05-14 18:18:44 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -72,6 +72,7 @@ else
 fi
 TAGPREFIX="${PWD#${PKGCENTER%/*}/}" # Remove everything leading up to pkgcenter
 TAGPREFIX="${TAGPREFIX%/*}"
+TAGPREFIX="$TAGPREFIX${TAGPREFIX:+-}${PWD##*/}"
 
 #
 # Replace bad characters with underscore
