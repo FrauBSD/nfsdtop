@@ -43,9 +43,9 @@ STAGE    = $(SOURCE_CONF) STAGE    | $(PKGCENTER)/Mk/xargs -n 1024
 #
 # Package tools
 #
-PKGCC        = $(PKGCENTER)/freebsd/Mk/pkgcc
+PKGCC        = $(PKGCENTER)/Mk/pkgcc
 PKGCCFLAGS   = -y
-CONVERT      = $(PKGCENTER)/freebsd/Mk/convert
+CONVERT      = $(PKGCENTER)/Mk/convert
 CONVERTFLAGS = -f
 TAR          = tar
 TARFLAGS     = c --exclude CVS -f
@@ -65,10 +65,10 @@ GENERATED_FILES = \
 # Package Specifics
 #
 CWD     = $$($(PWD))
-NAME    = $$($(PKGCENTER)/freebsd/Mk/pkgname "$(PLIST)")
-TAG     = $$($(PKGCENTER)/freebsd/Mk/pkgtag "$(NAME)")
-TAGNAME = $$($(PKGCENTER)/freebsd/Mk/pkgtagname "$(PLIST)")
-ORIGIN  = $$($(PKGCENTER)/freebsd/Mk/pkgorigin "$(PLIST)")
+NAME    = $$($(PKGCENTER)/Mk/pkgname "$(PLIST)")
+TAG     = $$($(PKGCENTER)/Mk/pkgtag "$(NAME)")
+TAGNAME = $$($(PKGCENTER)/Mk/pkgtagname "$(PLIST)")
+ORIGIN  = $$($(PKGCENTER)/Mk/pkgorigin "$(PLIST)")
 
 #
 # Standard utility pathnames
@@ -208,10 +208,10 @@ pull:
 .PHONY: usage targets help
 
 usage:
-	@$(CAT) $(PKGCENTER)/freebsd/Mk/USAGE_PACKAGE
+	@$(CAT) $(PKGCENTER)/Mk/USAGE_PACKAGE
 
 targets help:
-	@$(CAT) $(PKGCENTER)/freebsd/Mk/HELP_PACKAGE
+	@$(CAT) $(PKGCENTER)/Mk/HELP_PACKAGE
 
 ################################################################################
 # END

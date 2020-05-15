@@ -1,0 +1,46 @@
+// -*- tab-width: 4 -*-        ;; Emacs
+// vi: set noexpandtab         :: Vi/ViM
+// vi: set filetype=javascript ::
+{
+	//////////////////////////////////////////////////// HEADER
+
+	"name":"nfsdtop",
+	"origin":"fraubsd/nfsdtop",
+	"categories":["fraubsd"],
+
+	"comment":"Display top I/O on NFS servers using DTrace",
+	"licenselogic":"single",
+	"version":"x.y",
+
+	"maintainer":"dteske@freebsd.org",
+	"www":"https://www.fraubsd.org/nfsdtop",
+
+	"arch":"freebsd:*",
+	"prefix":"/usr/bin",
+
+	//////////////////////////////////////////////////// DESCRIPTION
+
+	"desc":"Display top I/O on NFS servers using DTrace.
+
+WWW: https://www.fraubsd.org/nfsdtop",
+
+	//////////////////////////////////////////////////// FILES
+
+	"files":[
+		"/usr/bin/nfsdtop",
+	],
+
+	//////////////////////////////////////////////////// DIRECTORIES
+
+	"directories":{
+		"/usr/bin":"y",
+	},
+}
+////////////////////////////////////////////////////////////////////////////////
+// END
+////////////////////////////////////////////////////////////////////////////////
+//
+// $Copyright: 2016-2020 The FrauBSD Project. All rights reserved. $
+// $FrauBSD: nfsdtop/freebsd/MANIFEST 2020-05-14 18:08:53 -0700 freebsdfrau $
+//
+////////////////////////////////////////////////////////////////////////////////

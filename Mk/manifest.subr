@@ -1,0 +1,668 @@
+# -*- tab-width: 4 -*- ;; Emacs
+# vi: set noexpandtab  :: Vi/ViM
+# vi: set filetype=sh  ::
+############################################################ IDENT(1)
+#
+# $Title: sh(1) subroutines for parsing pkg(1) MANIFEST files $
+# $Copyright: 2014-2017 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/Mk/manifest.subr 2020-05-14 18:08:53 -0700 freebsdfrau $
+#
+############################################################ CONFIGURATION
+
+#
+# Header for new MANIFEST files created
+#
+exec 9<<'EOF'
+// -*- tab-width: 4 -*-        ;; Emacs
+// vi: set noexpandtab         :: Vi/ViM
+// vi: set filetype=javascript ::
+EOF
+MANIFEST_HEADER=$( cat <&9 )
+
+#
+# Map of headings and the keyword(s) they should appear before
+#
+MANIFEST_HEADING='\t//////////////////////////////////////////////////// %s\n'
+MANIFEST_HEADINGS="
+	name:HEADER
+	desc:DESCRIPTION
+	deps:DEPENDENCIES
+	files:FILES
+	directories:DIRECTORIES
+	scripts:SCRIPTS
+	message:MESSAGE
+	messages:MESSAGES
+" # END-QUOTE
+
+#
+# Footer for new MANIFEST files created by unpack_manifest()
+#
+exec 9<<EOF
+////////////////////////////////////////////////////////////////////////////////
+// END
+////////////////////////////////////////////////////////////////////////////////
+//
+// \$FrauBSD\$
+//
+// \$Copyright: 2017 The FrauBSD Project. All rights reserved. $
+//
+////////////////////////////////////////////////////////////////////////////////
+EOF
+MANIFEST_FOOTER=$( cat <&9 )
+
+############################################################ GLOBALS
+
+#
+# Global exit status
+#
+SUCCESS=0
+FAILURE=1
+
+#
+# Miscellaneous
+#
+VALID_VARNAME_CHARS="0-9ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_"
+export VALID_VARNAME_CHARS # NB: exported for awk(1) `ENVIRON[]' visibility
+
+#
+# A Literal newline (for use with replaceall(), or IFS, or whatever)
+#
+NL="
+" # END-QUOTE
+
+#
+# A literal tab (for use with replaceall(), or IFS, or whatever)
+#
+TAB="	"
+
+############################################################ FUNCTIONS
+
+# manifest_read [-dl] [-p PREFIX] [-r OBJFILTER] [-R VALFILTER] [FILE]
+# manifest_read [-dl] [-p PREFIX] [-r OBJFILTER] [-R VALFILTER] -i "DATA"
+#
+# Read MANIFEST file in JSON format. If no other arguments are given, all
+# objects/properties are read into the current sh(1) namespace as a series of
+# environment variables.  If `-i' is given, take first argument as a full-and-
+# complete MANIFEST. If neither file nor data is given, read from stdin.
+#
+# If given `-d', enable debugging output (can be specified more than once for
+# additional debugging). Debug output is not visible if output is evaluated.
+# If given `-l', shell variables are set as `locals' (for use in functions).
+# If given `-p PREFIX', each environment variable begins with `PREFIX_'.
+# If given `-r FILTER_OBJECT', only objects matching FILTER_OBJECT regular
+# expression are read into the current namespace.
+# If given `-R FILTER_VALUE', only properties whose value match FILTER_VALUE
+# regular expression are read into the current namespace.
+#
+manifest_read_awk='
+	BEGIN {
+		nkeys[depth = 0] = keynum = 0
+		building_array = building_hash = building_string = 0
+		valid_chars = ENVIRON["VALID_VARNAME_CHARS"]
+		if (filter_object) filter_object = "^" filter_object "$"
+		if (filter_value) filter_value = "^" filter_value "$"
+	}
+	############################################### FUNCTIONS
+	function print_debug_msg(lvl, msg)
+	{
+		print "DEBUG" lvl ":", msg > "/dev/stderr"
+		fflush()
+	}
+	function dprint(msg) { if (debug) print_debug_msg(1, msg) }
+	function dprint2(msg) { if (debug >= 2) print_debug_msg(2, msg) }
+	function dprint3(msg) { if (debug >= 3) print_debug_msg(3, msg) }
+	function dprint4(msg) { if (debug >= 4) print_debug_msg(4, msg) }
+	function lprint(line) { print (local ? "local " : "") line }
+	function trim_match()
+	{
+		match_text = substr($0, RSTART, RLENGTH)
+		$0 = substr($0, RSTART + RLENGTH)
+		return match_text
+	}
+	function trim_keyword()
+	{
+		keylen = length(keynum > 0 ? keynum : key[depth,nkeys[depth]])
+		keynum = 0
+		if (!keylen) return
+		x = keyword
+		keyword = substr(keyword, 0, length(keyword) - keylen - 1)
+			# NB: The "-1" is for keyword separator "_"
+		dprint3(sprintf("TRIM KEY ([%s] => [%s])", x, keyword))
+	}
+	function objsafe(name)
+	{
+		gsub("[^" valid_chars "]", "_", name)
+		return name
+	}
+	function json_print(object, value)
+	{
+		if (object !~ filter_object) return
+		if (value !~ filter_value) return
+		gsub(/'\''/, "&\\\\&&", value)
+		object = objsafe(object)
+		lprint(object "='\''" value "'\''")
+	}
+	function json_print_type(object, type)
+	{
+		if (!keyword) return
+		if (object !~ filter_object) return
+		if (type)
+			lprint(object "_type=" type)
+		else if (building_array)
+			lprint(object "_type=array")
+		else if (building_hash)
+			lprint(object "_type=hash")
+		else
+			lprint(object "_type=scalar")
+	}
+	function json_print_keys(object, depth)
+	{
+		keys = ""
+		for (k = 1; k <= nkeys[depth]; k++) {
+			if (printed[key[depth,k]]) continue
+			printed[key[depth,k]] = 1
+			keys = keys " " key[depth,k]
+		}
+		json_print(object, substr(keys, 2))
+	}
+	function json_unset_value(object)
+	{
+		lprint(objsafe(object) "_value=")
+	}
+	function json_filtered_unset_value(object)
+	{
+		if (object !~ filter_object) return
+		return json_unset_value(object)
+	}
+	function json_objname()
+	{
+		objname = ""
+		if (building_array) {
+			objname = keyword "_" building_array++
+			dprint4(sprintf("RETURN ARRAY OBJNAME [%s]", objname))
+		} else if (building_hash) {
+			objname = keyword "_" building_hash++
+			dprint4(sprintf("RETURN HASH OBJNAME [%s]", objname))
+		} else if (building_string) {
+			objname = keyword
+			dprint4(sprintf("RETURN STRING OBJNAME [%s]", objname))
+		} else if (depth <= 1 && keyword) {
+			objname = keyword
+			dprint4(sprintf("RETURN ROOT OBJNAME [%s]", objname))
+		}
+
+		if (objname) return objname
+
+		# NB: If non-NULL current-depth key, increment for separator
+		if ((keylen = length(key[depth,nkeys[depth]]))) keylen++
+
+		objname = substr(keyword, 0, length(keyword) - keylen) \
+			"_" nkeys[depth]
+		dprint4(sprintf("RETURN OBJNAME [%s]", objname))
+		return objname
+	}
+	############################################### MAIN LOOP
+	building_string && !$0 { value = value "\\n"; next }
+	{ while ($0) { # Loop until done processing everything on this line
+		dprint(sprintf("%s:%u: %s", FILENAME, NR, $0))
+		if (building_string) {
+			while (match($0, /^[^"]*\\"/))
+				value = value trim_match()
+			if (!match($0, /^[^"]*"/)) { # No ending quote
+				value = value $0 "\\n"
+				dprint4(sprintf("STRING VALUE1 \"%s\"", value))
+				next # Continue reading on next line
+			}
+			nk = nkeys[depth]
+			dprint2(sprintf("END SCALAR key[%u,%u]=\"%s\"",
+				depth, nk, key[depth,nk]))
+			objname = json_objname()
+			building_string = 0
+			value = value substr($0, RSTART, RLENGTH - 1)
+			dprint4(sprintf("STRING VALUE2 \"%s\"", value))
+			trim_match()
+			sub(/^[[:space:]]*,[[:space:]]*/, "")
+			if (depth <= 1) {
+				json_print(objname, value)
+				if (!building_array) json_print_type(objname)
+			} else {
+				json_print(objname, key[depth,nk])
+				json_print(objname "_value", value)
+			}
+			if (!building_hash) trim_keyword()
+			if (depth <= 1)
+				json_print_type(keyword "_" nk)
+		}
+		################################### COMMENT PATTERNS
+		else if ($0 ~ "^[[:space:]]*(//|$)") { next }
+		################################### OPENING PATTERNS
+		else if (match($0, /^[[:space:]]*{[[:space:]]*/)) {
+			building_hash = (depth > 0)
+			nk = nkeys[depth]
+			dprint2(sprintf("BEGIN HASH key[%u,%u]=\"%s\"",
+				depth, nk, key[depth,nk]))
+			if (depth > 1) {
+				x = keyword
+				keyword = keyword "_" nk
+				keynum = nk
+				dprint3(sprintf("APPEND HASH ([%s] => [%s])",
+					x, keyword))
+			}
+			nkeys[++depth] = 0
+			trim_match()
+		} else if (keyword && match($0, /^[[:space:]]*\[/)) {
+			dprint2(sprintf("BEGIN ARRAY key[%u,%u]=\"%s\"",
+				depth, nkeys[depth], key[depth,nk]))
+			building_array = 1
+			trim_match()
+		}
+		################################### OBJECTS
+		else if (match($0, \
+			/^[[:space:]]*"[^"]+"[[:space:]]*:[[:space:]]*/ \
+		)) {
+			nkeys[depth]++
+			nk = nkeys[depth]
+			key[depth,nk] = trim_match()
+			sub(/^[[:space:]]*"/, "", key[depth,nk])
+			sub(/"[[:space:]]*:[[:space:]]*$/, "", key[depth,nk])
+			kp = key[depth,nk]
+			dprint2(sprintf("START OBJECT key[%u,%u]=\"%s\"",
+				depth, nk, kp))
+			if (keyword && !building_hash)
+				json_print(keyword "_" nk, objsafe(kp))
+			if (!building_hash) {
+				x = keyword
+				keyword = keyword (keyword ? "_" : "") kp
+				dprint3(sprintf("APPEND KEY ([%s] => [%s])",
+					x, keyword))
+			}
+		}
+		################################### PROPERTIES
+		else if (keyword && match($0, /^[[:space:]]*"/)) {
+			value = ""
+			trim_match()
+			while (match($0, /^[^"]*\\"/))
+				value = value trim_match()
+			if (!match($0, /^[^"]*"/)) {
+				nk = nkeys[depth]
+				dprint2(sprintf( \
+					"BEGIN SCALAR key[%u,%u]=\"%s\"",
+					depth, nk, key[depth,nk]))
+				building_string = 1
+				value = value $0 "\\n"
+				dprint4(sprintf("STRING VALUE3 \"%s\"", value))
+				next
+			}
+			value = value substr($0, RSTART, RLENGTH - 1)
+			dprint4(sprintf("STRING VALUE4 \"%s\"", value))
+			trim_match()
+			sub(/^[[:space:]]*,[[:space:]]*/, "")
+	
+			object = json_objname()
+			nk = nkeys[depth]
+			if (depth <= 1) {
+				json_print(object, value)
+				if (!building_array) json_print_type(object)
+			} else {
+				json_print(object, key[depth,nk])
+				json_print(object "_value", value)
+			}
+			if (building_hash) {
+				if (!value) json_filtered_unset_value(object)
+			} else if (!building_array) {
+				trim_keyword()
+				json_print_type(keyword "_" nk)
+			}
+		}
+		else if (keyword && match($0, \
+			/^[[:space:]]*[^[:space:],}\]]+[[:space:]]*/ \
+		)) {
+			value = trim_match()
+			sub(/^[[:space:]]*/, "", value)
+			sub(/[[:space:]]*$/, "", value)
+			sub(/^[[:space:]]*,[[:space:]]*/, "")
+			json_print(keyword, value)
+			json_print_type(keyword)
+			trim_keyword()
+			if (!building_array)
+				json_print_type(keyword "_" nkeys[depth])
+		}
+		################################### CLOSING PATTERNS
+		else if (match($0, /^[[:space:]]*\][[:space:]]*/)) {
+			json_print(keyword "_len", --building_array)
+			json_print_type(keyword, "array")
+			nk = nkeys[depth]
+			items = building_array
+			building_array = 0
+			trim_keyword()
+			trim_match()
+			sub(/^[[:space:]]*,[[:space:]]*/, "")
+			json_print_type(keyword "_" nk, "array")
+			dprint2(sprintf("END ARRAY key[%u,%u]=\"%s\"" \
+				" holding %u object%s", depth, nk,
+				key[depth,nk], items, items != 1 ? "s" : ""))
+		}
+		else if (match($0, /^[[:space:]]*}[[:space:]]*/)) {
+			nk = nkeys[depth]
+			if (keyword && depth >= 1) {
+				hashname = key[depth-1,nkeys[depth-1]]
+				json_print(keyword, hashname)
+				json_print(keyword "_len", nk)
+				json_print_type(keyword, "hash")
+			}
+			building_hash = 0
+			depth-- # NB: Done prior to calling trim_keyword()
+			trim_keyword()
+			trim_match()
+			sub(/^[[:space:]]*,[[:space:]]*/, "")
+			building_hash = (depth > 1)
+			if (depth == 1) {
+				objname = keyword "_" nkeys[depth]
+				json_print_type(objname, "hash")
+			}
+			if (depth < 0) {
+				json_print_keys(keyword, depth+1)
+				dprint2(sprintf("END HASH key[%u,%u]=\"%s\"" \
+					" holding %u object%s", depth+2,
+					nkeys[depth+2],
+					key[depth+2,nkeys[depth+2]],
+					nkeys[depth+3],
+					nkeys[depth+3] != 1 ? "s" : ""))
+			} else if (kp = key[depth,nkeys[depth]]) {
+				dprint2(sprintf("END HASH key[%u,%u]=\"%s\"" \
+					" holding %u object%s", depth,
+					nkeys[depth], kp, nkeys[depth+1],
+					nkeys[depth+1] != 1 ? "s" : ""))
+			}
+		}
+	} }
+	############################################### END
+	END {
+		json_print_keys(keyword "_keys", 1)
+		dprint2(sprintf("END HASH holding %u object%s", nkeys[1],
+			nkeys[1] != 1 ? "s" : ""))
+	}
+' # END-QUOTE
+manifest_read()
+{
+	local __debug=0 __local=0
+	local __prefix __obj_regex __value_regex __arg_is_data=
+
+	local OPTIND=1 OPTARG __flag
+	while getopts dilp:r:R: __flag; do
+		case "$__flag" in
+		d) __debug=$(( $__debug + 1 )) ;;
+		i) __arg_is_data=1 ;;
+		l) __local=1 ;;
+		p) __prefix="$OPTARG" ;;
+		r) __obj_regex="$OPTARG" ;;
+		R) __value_regex="$OPTARG" ;;
+		\?|*) return $FAILURE
+		esac
+	done
+	shift $(( $OPTIND - 1 ))
+
+	if [ "$__arg_is_data" ]; then
+		if [ $__local -eq 1 ]; then
+			echo "$1" | awk -v debug="$__debug" \
+				-v local="$__local" \
+				-v keyword="$__prefix" \
+				-v filter_object="$__obj_regex" \
+				-v filter_value="$__value_regex" \
+				"$manifest_read_awk"
+		else
+			eval "$( echo "$1" | awk -v debug="$__debug" \
+				-v local="$__local" \
+				-v keyword="$__prefix" \
+				-v filter_object="$__obj_regex" \
+				-v filter_value="$__value_regex" \
+				"$manifest_read_awk" )"
+		fi
+	else
+		if [ $__local -eq 1 ]; then
+			awk -v debug="$__debug" \
+				-v local="$__local" \
+				-v keyword="$__prefix" \
+				-v filter_object="$__obj_regex" \
+				-v filter_value="$__value_regex" \
+				"$manifest_read_awk" "$@"
+		else
+			eval "$( awk -v debug="$__debug" \
+				-v local="$__local" \
+				-v keyword="$__prefix" \
+				-v filter_object="$__obj_regex" \
+				-v filter_value="$__value_regex" \
+				"$manifest_read_awk" "$@" )"
+		fi
+	fi
+}
+
+# isinteger ARGUMENT
+#
+# Returns true if argument is a positive/negative whole integer.
+#
+isinteger()
+{
+	local arg="${1#-}"
+	[ "${arg:-x}" = "${arg%[!0-9]*}" ]
+}
+
+# replaceall STRING FIND REPLACE [VAR_TO_SET]
+#
+# Replace all occurrences of find in string with replace. If var_to_set is
+# either missing or NULL, the modified string is produced on standard out for
+# capturing in a sub-shell (which is less recommended due to performance
+# degradation).
+#
+# To replace newlines or a sequence containing the newline character, use $NL
+# as `\n' is not supported.
+#
+replaceall()
+{
+	local __left="" __right="$1"
+	local __find="$2" __replace="$3" __var_to_set="$4"
+	while :; do
+		case "$__right" in *$__find*)
+		        __left="$__left${__right%%$__find*}$__replace"
+		        __right="${__right#*$__find}"
+		        continue
+		esac
+		break
+	done
+	__left="$__left${__right#*$__find}"
+	if [ "$__var_to_set" ]; then
+		eval $__var_to_set=\"\$__left\"
+	else
+		echo "$__left"
+	fi
+}
+
+# manifest_unpack_scalar KEY VALUE
+#
+# Unpack manifest key/value pair to stdout.
+#
+manifest_unpack_scalar()
+{
+	local __key="$1" __value="$2"
+	if isinteger "$__value"; then
+		printf '"%s":%i' "$__key" $__value
+	else
+		replaceall "$__value" '\\n' "$NL" __value
+		replaceall "$__value" '\\t' "$TAB" __value
+		printf '"%s":"%s"' "$__key" "$__value"
+	fi
+}
+
+# manifest_unpack_array KEY
+#
+# Unpack manifest key array and numbered values to stdout.
+#
+manifest_unpack_array()
+{
+	local __key="$1"
+	case "$__key" in
+	files|shlibs_provided|shlibs_required) printf '"%s":[\n' "$__key" ;;
+	*) printf '"%s":[' "$__key"
+	esac
+	local __n=1 __valuen
+	eval local __len=\"\$${__key}_len\"
+	while [ $__n -le ${__len:-0} ]; do
+		eval __valuen=\"\$${__key}_$__n\"
+		case "$__key" in
+		files|shlibs_provided|shlibs_required)
+			printf '\t\t"%s",\n' "$__valuen" ;;
+		*)
+			[ $__n -gt 1 ] && printf ","
+			printf '"%s"' "$__valuen"
+		esac
+		__n=$(( $__n + 1 ))
+	done
+	case "$__key" in
+	files|shlibs_provided|shlibs_required) printf '\t]' ;;
+	*) printf "]"
+	esac
+}
+
+# manifest_unpack_hash KEY
+#
+# Unpack manifest key hash and numbered keys/values to stdout. If key is
+# `files' (case-sensitive), convert to JSON array without SHA256 signatures.
+#
+manifest_unpack_hash()
+{
+	local __key="$1"
+	eval local __name=\"\$$__key\"
+	case "$__key" in
+	files) printf '"%s":[\n' "$__name" ;; # Convert
+	deps|directories|messages|scripts) printf '"%s":{\n' "$__name" ;;
+	*) printf '"%s":{' "$__name"
+	esac
+	local __n=1 __keyn __valuen __typen
+	eval local __len=\"\$${__key}_len\"
+	while [ $__n -le ${__len:-0} ]; do
+		eval __keyn=\"\$${__key}_$__n\"
+		eval __valuen=\"\$${__key}_${__n}_value\"
+		eval __typen=\"\$${__key}_${__n}_type\"
+		case "$__key" in
+		files) # Convert
+			printf '\t\t"%s",\n' "$__keyn" ;;
+		directories|messages|scripts)
+			printf '\t\t'
+			manifest_unpack_scalar "$__keyn" "$__valuen"
+			echo , ;;
+		deps)
+			printf '\t\t'
+			manifest_unpack_hash "${__key}_$__n"
+			echo , ;;
+		*)
+			[ $__n -gt 1 ] && printf ","
+			case "$__typen" in
+			array) manifest_unpack_array "$__keyn" ;;
+			hash) manifest_unpack_hash "${__key}_$__n" ;;
+			*) manifest_unpack_scalar "$__keyn" "$__valuen"
+			esac
+		esac
+		__n=$(( $__n + 1 ))
+	done
+	case "$__key" in
+	files) printf '\t]' ;; # Convert
+	deps|directories|messages|scripts) printf '\t}' ;;
+	*) printf "}"
+	esac
+}
+
+# unpack_manifest
+# Usage:
+# 	unpack_manifest DATA
+# 		OR
+# 	unpack_manifest < FILE
+#
+# DESCRIPTION:
+#   Takes the contents of a packing-list (+MANIFEST or +COMPACT_MANIFEST)
+#   either in the form of data being piped-in, or as an argument provided to
+#   this function. WHen provided as an argument, you must encapsulate the data
+#   with double-quotes to preserve the multi-line nature of the data.
+#   For example:
+#
+# 	Simple:
+# 		unpack_manifest "$( cat ./MANIFEST )"
+# 	- or -
+# 		unpack_manifest "`cat ./MANIFEST`"
+#
+# 	Compound:
+# 		data="$( cat ./MANIFEST )"
+# 	- or -
+# 		data="`cat ./MANIFEST`"
+# 	- or -
+# 		data=$( cat ./MANIFEST )
+# 	- or -
+# 		data=`cat ./MANIFEST`
+# 	- then -
+# 		unpack_manifest "$data"
+#
+#   While you should avoid the following [unsupported] syntaxes:
+#
+# 	To be avoided:
+# 		unpack_manifest $( cat ./MANIFEST )
+# 	- or -
+# 		unpack_manifest `cat ./MANIFEST`
+# 	- or -
+# 		unpack_manifest $data
+#
+#   Finally, you can pipe the packing-list data directly into the function. See
+#   below:
+#
+# 	Handling PIPE data:
+# 		cat ./MANIFEST | unpack_manifest
+# 	- or -
+# 		unpack_manifest < ./MANIFEST
+#
+unpack_manifest()
+{
+	local data="$1"
+	if [ $# -gt 0 ]; then
+		eval "$( manifest_read -l -i "$data" )"
+	else
+		eval "$( manifest_read -l )" # read stdin
+	fi || return $FAILURE
+	set -- $_keys
+
+	local __key __value __type __head
+	local __keyn __valuen __typen __len __n
+
+	[ "$MANIFEST_HEADER" ] && echo "$MANIFEST_HEADER"
+
+	echo "{"
+	while [ $# -gt 0 ]; do
+		__key=$1
+		shift
+		case "$__key" in
+		flatsize) continue ;;
+		esac
+		for __head in $MANIFEST_HEADINGS; do
+			case "$__key" in ${__head%:*})
+				[ "$__key" != name ] && echo
+				printf "$MANIFEST_HEADING\n" "${__head##*:}"
+				;;
+			esac
+		done
+		eval __value=\"\$$__key\"
+		eval __type=\"\$${__key}_type\"
+		printf "\t"
+		case "$__type" in
+		array) manifest_unpack_array "$__key" ;;
+		hash) manifest_unpack_hash "$__key" ;;
+		*) manifest_unpack_scalar "$__key" "$__value"
+		esac
+		echo ,
+	done
+	echo "}"
+
+	[ "$MANIFEST_FOOTER" ] && echo "$MANIFEST_FOOTER"
+
+	return $SUCCESS
+}
+
+################################################################################
+# END
+################################################################################
