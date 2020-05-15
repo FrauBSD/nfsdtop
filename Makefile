@@ -1,8 +1,8 @@
 ############################################################ IDENT(1)
 #
-# $Title: Makefile for installing nfsdtop on Linux $
+# $Title: Makefile for installing nfsdtop on FreeBSD $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/GNUmakefile 2020-05-14 17:51:25 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/Makefile 2020-05-14 17:51:25 -0700 freebsdfrau $
 #
 ############################################################ CONFIGURATION
 
@@ -28,7 +28,7 @@ all:
 
 install:
 	$(MKDIR_P) $(BINDIR)
-	$(CP_F) redhat/$(PROG) $(BINDIR)/
+	$(CP_F) freebsd/$(PROG) $(BINDIR)/
 
 uninstall:
 	$(RM_F) $(BINDIR)/$(PROG)
