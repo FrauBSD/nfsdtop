@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 16:57:25 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 17:40:52 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.5-beta-5 $'
+VERSION='$Version: 4.5-rc-1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -225,7 +225,7 @@ while getopts abC:cDdG:ghi:JjN:nP:p:rU:uvw flag; do
 	g) VIEW=GROUP VIEW_GROUP=1 ;;
 	i) INTERVAL="$OPTARG" ;;
 	J) VIEW=JSON OUTPUT_JSON=1 \
-		VIEW_CLIENT=1 VIEW_GROUP=1 VIEW_SERVER=1 VIEW_USER=1 ;;
+		VIEW_CLIENT=1 VIEW_GROUP=1 VIEW_USER=1 ;;
 	j) OUTPUT_JSON=1 ;;
 	N) [ "$OPTARG" ] || usage "-N option requires an argument" # NOTREACHED
 		NSAMPLES="$OPTARG" ;;
@@ -710,7 +710,6 @@ EOF
 	-v cons=${CONS:-0} \
 	-v debug=${DEBUG:-0} \
 	-v debugger=${DEBUGGER:-0} \
-	-v filter_file="$FILTER_FILE" \
 	-v group_map="$GROUP_MAP" \
 	-v interval=$INTERVAL_SECONDS \
 	-v ip_map="$IP_MAP" \
@@ -897,9 +896,7 @@ EOF
 	{
 		# ST: VIEWS
 		delete client_keys
-		delete file_keys
 		delete group_keys
-		delete server_keys
 		delete user_keys
 
 		nviews = 0
@@ -999,12 +996,8 @@ EOF
 		# ST: VIEWS
 		if (map_view == "client") for (map_key in client_keys)
 			_keys[map_key] = client_keys[map_key]
-		else if (map_view == "file") for (map_key in file_keys)
-			_keys[map_key] = file_keys[map_key]
 		else if (map_view == "group") for (map_key in group_keys)
 			_keys[map_key] = group_keys[map_key]
-		else if (map_view == "server") for (map_key in server_keys)
-			_keys[map_key] = server_keys[map_key]
 		else if (map_view == "user") for (map_key in user_keys)
 			_keys[map_key] = user_keys[map_key]
 	}
@@ -1020,17 +1013,6 @@ EOF
 		map_value = $NF
 
 		#
-		# ST: FILTERS
-		#
-
-		if (map_view == "file") {
-			gsub(/, /, "/", map_key)
-			gsub("//+", "/", map_key)
-			if (filter_file != "" && map_key !~ filter_file)
-				return 0
-		}
-
-		#
 		# ST: VIEWS
 		#
 
@@ -1039,9 +1021,7 @@ EOF
 			view_list[++nviews] = map_view
 		}
 		if (map_view == "client") client_keys[map_key]
-		else if (map_view == "file") file_keys[map_key]
 		else if (map_view == "group") group_keys[map_key]
-		else if (map_view == "server") server_keys[map_key]
 		else if (map_view == "user") user_keys[map_key]
 
 		#
@@ -1246,7 +1226,7 @@ EOF
 
 		if (!no_names) {
 			_cred = cred
-			if (curview == "client" || curview == "server") {
+			if (curview == "client") {
 				if (cred in ip2name) cred = ip2name[cred]
 			} else if (curview == "group") {
 				if (cred in gid2name) cred = gid2name[cred]
@@ -1279,11 +1259,7 @@ EOF
 		} else if (show_bytes) {
 			# ST: VIEWDATA
 			if (length(cred) > vsz) {
-				if (curview == "file")
-					cred = "..." substr(cred,
-						length(cred) - vsz + 4)
-				else
-					cred = substr(cred, 1, vsz)
+				cred = substr(cred, 1, vsz)
 			}
 			buffer_add1(cred, humanize(cred_rw),
 				humanize(cred_read), read_bar,
@@ -1291,11 +1267,7 @@ EOF
 		} else {
 			# ST: VIEWDATA
 			if (length(cred) > vsz) {
-				if (curview == "file")
-					cred = "..." substr(cred,
-						length(cred) - vsz + 4)
-				else
-					cred = substr(cred, 1, vsz)
+				cred = substr(cred, 1, vsz)
 			}
 			buffer_add1(cred, humanize(rw_rate),
 				humanize(read_rate), read_bar,
