@@ -1,0 +1,69 @@
+Generic Targets
+
+	all (or no arguments)
+	help
+	targets
+	    Print summary information about available targets.
+
+	usage
+	    Print this text and exit.
+
+Global Building Targets:
+
+	all_freebsd
+	    Performs `make all' in all package directories, attempting to
+	    build each/every package.
+
+	depend_freebsd
+	    Performs `make depend' in all package directories, copying static
+	    file dependencies (if configured) from the `depend' tree into the
+	    given package sub-directory.
+
+	forcedepend_freebsd
+	    Performs `make forcedepend' in all package directories, forcing the
+	    copy of file dependencies (if configured) from the `depend' tree
+	    overwriting local copies in the given package sub-directory.
+
+Global Maintenance Targets:
+
+	clean_freebsd
+	    Performs `make clean' in all package directories.
+
+	distclean_freebsd
+	    Performs `make distclean' in all package directories.
+
+	    WARNING: This is intended to remove any/all compiled packages,
+	             returning the repository to an SCM-clean state.
+
+	pull_freebsd
+	    Performs `make pull' in all package directories.
+
+	commit_freebsd
+	    Performs `make commit' in all package directories.
+
+Git Maintenance Targets:
+
+	pull
+	    An alias for `git pull'.
+
+	tag_freebsd
+	    Performs `make tag' in all package directories, tagging files for a
+	    given package to the current package version.
+
+	forcetag_freebsd
+	    Performs `make forcetag' in all package directories, tagging files
+	    for a given package to the current package version even if already
+	    tagged at a lower revision with the same tag.
+
+	taglist_freebsd
+	    Performs `make taglist' in all package directories, listing tags
+	    for each package.
+
+Git Addition Targets:
+
+	commit
+	    An alias to `git commit'.
+
+	import
+	    Import current working directory to git.
+

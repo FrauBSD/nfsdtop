@@ -1,0 +1,304 @@
+#!/bin/sh
+# -*- tab-width: 4 -*- ;; Emacs
+# vi: set noexpandtab  :: Vi/ViM
+############################################################ IDENT(1)
+#
+# $Title: Script to convert packing-list format(s) $
+# $Copyright: 1999-2017 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/Mk/convert 2020-05-14 17:55:22 -0700 freebsdfrau $
+#
+############################################################ INFORMATION
+#
+# Usage: convert [-fh] input [output [stagedir]]
+# OPTIONS:
+# 	-f     Force. Allow overwriting files that already exist.
+# 	-h     Print this message to stderr and exit.
+#
+############################################################ INCLUDES
+
+progdir="${0%/*}"
+. "$progdir/manifest.subr" || exit
+
+############################################################ GLOBALS
+
+pgm="${0##*/}" # Program basename
+
+#
+# Command-line options
+#
+FORCE=		# -f
+
+############################################################ FUNCTIONS
+
+# err FORMAT [ARGUMENT ...]
+#
+# Print a message to stderr.
+#
+err()
+{
+	local fmt="$1"
+	shift 1 # fmt
+	[ "$fmt" ] || return $SUCCESS
+	printf "$fmt\n" "$@" >&2
+}
+
+# die [FORMAT [ARGUMENT ...]]
+#
+# Optionally print a message to stderr before exiting with failure status.
+#
+die()
+{
+	err "$@"
+	exit $FAILURE
+}
+
+# usage
+#
+# Prints a short syntax statement and exits.
+#
+usage()
+{
+	err "Usage: %s [-fh] input [output [stagedir]]" "$pgm"
+	local optfmt="\t%-7s%s"
+	err "OPTIONS:"
+	err "$optfmt" "-f" "Force. Allow overwriting files that already exist."
+	err "$optfmt" "-h" "Print this message to stderr and exit."
+	die
+}
+
+############################################################ MAIN
+
+#
+# Process command-line options
+#
+while getopts hoaf flag; do
+	case "$flag" in
+	h|\?) usage ;;
+	f) FORCE=1 ;;
+	esac
+done
+shift $(( $OPTIND - 1 ))
+
+#
+# Validate number of arguments
+#
+[ $# -gt 0 ] || usage
+[ $# -le 3 ] || usage
+
+#
+# Process command-line arguments
+#
+INPUT="$1" OUTPUT="$2" STAGEDIR="$3"
+
+#
+# Convert packing-list format
+#
+case "$INPUT" in
+*PLIST|*CONTENTS) die "Conversion to MANIFEST currently unsupported" ;;
+*) # MANIFEST
+	manifest_read "$INPUT" || exit
+	if ! manifest_read "$INPUT" || [ ! "$_keys" ]; then
+		err "ERROR: Unable to parse JSON input file \`%s'" "$INPUT"
+		die "ERROR: Exiting"
+	fi
+
+	if [ ! "$OUTPUT" ]; then
+		case "$INPUT" in
+		*/*) OUTPUT="${INPUT%/*}/PLIST" ;;
+		  *) OUTPUT="PLIST"
+		esac
+	fi
+	echo "Converting $INPUT to $OUTPUT for pkg_tools..."
+
+	if [ ! "$STAGEDIR" ]; then
+		case "$OUTPUT" in
+		*/*) STAGEDIR="${OUTPUT%/*}" ;;
+		  *) STAGEDIR="."
+		esac
+	fi
+	STAGEDIR="${STAGEDIR%/}"
+	echo "Auxiliary files will be created in \`$STAGEDIR'"
+
+	IGNORE=
+
+	#
+	# +COMMENT
+	#
+	if [ "$comment" ]; then
+		FILE="$STAGEDIR/+COMMENT"
+		echo "==> Creating ${FILE##*/}"
+		if [ -e "$FILE" ]; then
+			err "ERROR: File \`%s' already exists" "$FILE"
+			[ "$FORCE" ] ||
+				die "ERROR: Exiting (use \`-f' to override)"
+			err "ERROR: Proceeding anyway (\`-f' was passed)"
+		fi
+		if ! echo "$comment" > "$FILE"; then
+			err "ERROR: Could not create file \`%s'" "$FILE"
+			die "ERROR: Exiting"
+		fi
+		IGNORE="$IGNORE ${FILE##*/}"
+	fi
+
+	#
+	# +DESC
+	#
+	if [ "$desc" ]; then
+		FILE="$STAGEDIR/+DESC"
+		echo "==> Creating ${FILE##*/}"
+		if [ -e "$FILE" ]; then
+			err "ERROR: File \`%s' already exists" "$FILE"
+			[ "$FORCE" ] ||
+				die "ERROR: Exiting (use \`-f' to override)"
+			err "ERROR: Proceeding anyway (\`-f' was passed)"
+		fi
+		replaceall "$desc" "\\n" "$NL" desc
+		if ! echo "$desc" > "$FILE"; then
+			err "ERROR: Could not create file \`%s'" "$FILE"
+			die "ERROR: Exiting"
+		fi
+		IGNORE="$IGNORE ${FILE##*/}"
+	fi
+
+	#
+	# +DISPLAY
+	#
+	if [ "$message" ]; then
+		FILE="$STAGEDIR/+DISPLAY"
+		echo "==> Creating ${FILE##*/}"
+		if [ -e "$FILE" ]; then
+			err "ERROR: File \`%s' already exists" "$FILE"
+			[ "$FORCE" ] ||
+				die "ERROR: Exiting (use \`-f' to override)"
+			err "ERROR: Proceeding anyway (\`-f' was passed)"
+		fi
+		replaceall "$message" "\\n" "$NL" message
+		if ! echo "$message" > "$FILE"; then
+			err "ERROR: Could not create file \`%s'" "$FILE"
+			die "ERROR: Exiting"
+		fi
+		IGNORE="$IGNORE ${FILE##*/}"
+	fi
+
+	#
+	# +{POST-,}{DE,}INSTALL scripts
+	#
+	n=1
+	while [ $n -le ${scripts_len:-0} ]; do
+		eval file=\"\$scripts_$n\" script=\"\$scripts_${n}_value\"
+		n=$(( $n + 1 ))
+		case "$file" in
+		install) FILE=+INSTALL ;;
+		deinstall) FILE=+DEINSTALL ;;
+		pre-install) FILE=+INSTALL ;;
+		post-install) FILE=+POST-INSTALL ;;
+		pre-deinstall) FILE=+DEINSTALL ;;
+		post-deinstall) FILE=+POST-DEINSTALL ;;
+		*) continue
+		esac
+		FILE="$STAGEDIR/$FILE"
+		echo "==> Creating ${FILE##*/}"
+		if [ -e "$FILE" ]; then
+			err "ERROR: File \`%s' already exists" "$FILE"
+			[ "$FORCE" ] ||
+				die "ERROR: Exiting (use \`-f' to override)"
+			err "ERROR: Proceeding anyway (\`-f' was passed)"
+		fi
+		replaceall "$script" "\\n" "$NL" script
+		if ! echo "#!/bin/sh" > "$FILE"; then
+			err "ERROR: Could not create file \`%s'" "$FILE"
+			die "ERROR: Exiting"
+		fi
+		if ! echo "$script" >> "$FILE"; then
+			err "ERROR: Could not append to file \`%s'" "$FILE"
+			die "ERROR: Exiting"
+		fi
+		if ! chmod +x "$FILE"; then
+			err "ERROR: Could not make \`%s' executable" "$FILE"
+			die "ERROR: Exiting"
+		fi
+		IGNORE="$IGNORE ${FILE##*/}"
+	done
+
+	#
+	# PLIST ($OUTPUT)
+	#
+	FILE="$OUTPUT"
+	echo "==> Creating ${FILE##*/}"
+	if [ -e "$FILE" ]; then
+		err "ERROR: File \`%s' already exists" "$FILE"
+		[ "$FORCE" ] || die "ERROR: Exiting (use \`-f' to override)"
+		err "ERROR: Proceeding anyway (\`-f' was passed)"
+	fi
+	if ! echo "@comment PKG_FORMAT_REVISION:1.1" > "$FILE"; then
+		err "ERROR: Could not create file \`%s'" "$FILE"
+		die "ERROR: Exiting"
+	fi
+	if ! cat <<-EOF >> "$FILE"
+	@name $name-$version
+	@comment ORIGIN:$origin
+	@owner root
+	@group wheel
+	@cwd /
+	EOF
+	then
+		err "ERROR: Could not append to file \`%s'" "$FILE"
+		die "ERROR: Exiting"
+	fi
+	n=1
+	while [ $n -le ${deps_len:-0} ]; do
+		eval dep=\"\$deps_$n\" deporigin=
+		eval dep_len=\"\$deps_${n}_len\" k=1
+		while [ $k -le ${dep_len:-0} ]; do
+			eval kk=\"\$deps_${n}_$k\"
+			eval kv=\"\$deps_${n}_${k}_value\"
+			case "$kk" in
+			origin) deporigin="$kv" ;;
+			version) dep="$dep-$kv" ;;
+			esac
+			k=$(( $k + 1 ))
+		done
+		echo "@pkgdep $dep"
+		echo "@comment DEPORIGIN:$deporigin"
+		n=$(( $n + 1 ))
+	done >> "$FILE" || {
+		err "ERROR: Could not append to file \`%s'" "$FILE"
+		die "ERROR: Exiting"
+	}
+	n=1
+	while [ $n -le ${files_len:-0} ]; do
+		eval file=\"\$files_$n\"
+		echo "${file#/}"
+		n=$(( $n + 1 ))
+	done >> "$FILE" || {
+		err "ERROR: Could not append to file \`%s'" "$FILE"
+		die "ERROR: Exiting"
+	}
+	n=1
+	while [ $n -le ${directories_len:-0} ]; do
+		eval directory=\"\$directories_$n\"
+		echo "@dirrm $directory"
+		n=$(( $n + 1 ))
+	done >> "$FILE" || {
+		err "ERROR: Could not append to file \`%s'" "$FILE"
+		die "ERROR: Exiting"
+	}
+	if ! echo "@cwd ." >> "$FILE"; then
+		err "ERROR: Could not append to file \`%s'" "$FILE"
+		die "ERROR: Exiting"
+	fi
+	for ignore in $IGNORE; do
+		echo "@ignore"
+		echo "$ignore"
+	done >> "$FILE" || {
+		err "ERROR: Could not append to file \`%s'" "$FILE"
+		die "ERROR: Exiting"
+	}
+
+esac
+
+exit $SUCCESS
+
+################################################################################
+# END
+################################################################################

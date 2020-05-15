@@ -1,0 +1,87 @@
+#!/bin/sh
+# -*- tab-width: 4 -*- ;; Emacs
+# vi: set noexpandtab  :: Vi/ViM
+############################################################ IDENT(1)
+#
+# $Title: Script for getting the package tag from a package name $
+# $Copyright: 1999-2017 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/Mk/pkgtag 2020-05-14 17:55:22 -0700 freebsdfrau $
+#
+############################################################ INFORMATION
+#
+# Usage: pkgtag NAME
+#
+############################################################ GLOBALS
+
+#
+# Global exit status
+#
+SUCCESS=0
+FAILURE=1
+
+#
+# OS Glue
+#
+: ${UNAME_s:=$( uname -s )}
+
+#
+# Utility pathnames
+#
+: ${AWK:=awk}
+
+############################################################ FUNCTIONS
+
+if ! type realpath > /dev/null 2>&1; then
+case "$UNAME_s" in
+Darwin)
+realpath()
+{
+	perl -le 'use Cwd; print Cwd::abs_path(@ARGV)' -- "$@"
+}
+;;
+*)
+realpath()
+{
+	readlink -f "$@"
+}
+esac
+fi
+
+############################################################ MAIN
+
+#
+# Validate number of arguments
+#
+[ $# -gt 0 ] || exit $SUCCESS
+
+#
+# Build the tag prefix
+#
+PWD=$( realpath "$PWD" )
+if [ "$PKGCENTER" ]; then
+	PKGCENTER=$( realpath "$PKGCENTER" )
+else
+	PKGCENTER="$PWD"
+	while [ "$PKGCENTER" ]; do
+		[ -e "$PKGCENTER/Mk/pkgcenter_readconf" ] && break
+		case "$PKGCENTER" in
+		*/*) PKGCENTER="${PKGCENTER%/*}" ;;
+		  *) PKGCENTER=
+		esac
+	done
+fi
+TAGPREFIX="${PWD#${PKGCENTER%/*}/}" # Remove everything leading up to pkgcenter
+TAGPREFIX="${TAGPREFIX%/*}"
+
+#
+# Replace bad characters with underscore
+#
+echo "${TAGPREFIX:+$TAGPREFIX/}$1" | $AWK '{
+	gsub("/", "-")
+	gsub(/[^[:alnum:]]!&+,=_-]/, "_")
+	print
+}'
+
+################################################################################
+# END
+################################################################################

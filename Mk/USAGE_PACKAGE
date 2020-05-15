@@ -1,0 +1,78 @@
+Generic Targets
+
+	help
+	targets
+	    Print summary information about available targets.
+
+	usage
+	    Print this text and exit.
+
+Package Building Targets:
+
+	all (or no arguments)
+	    A pseudonym for the separate targets (in the order shown): dirs,
+	    symlinks, depend, and package (each described below).
+
+	dirs
+	    Creates statically configured directories. This feature is used
+	    most often when a package contains empty directories which should
+	    not be committed to CVS. By default, DIRS is not configured.
+
+	symlinks
+	    Creates statically configured symbolic-links. This feature is used
+	    most often when a package contains symbolic-links which should not
+	    be committed to CVS. By default, SYMLINKS is not configured.
+
+	depend
+	    Copies statically configured file dependencies from source to
+	    destination when the source exists and is newer than the
+	    destination. This feature is used most often when a package
+	    contains files in-common with one or more releases for other
+	    Operating Systems. By default, DEPEND is not configured.
+
+	forcedepend
+	    Like depend, but forces the copying of all configured file
+	    dependencies. Useful when you want to make sure that your local
+	    tree is up-to-date with the latest external dependencies. Unlike
+	    depend, if any dependency source file is missing an error is
+	    generated causing premature termination.
+
+	package
+	    Compiles PLIST into +CONTENTS and packages up the source directory,
+	    producing a compressed tar archive in the current working directory
+	    named appropriately given the name provided in the PLIST file.
+
+Package Maintenance Targets:
+
+	clean
+	    Delete generated files, statically configured symbolic-links and
+	    directories that were created previously.
+
+	distclean
+	    Performs a clean (see above) and then deletes compressed tar
+	    archives in the current working directory.
+
+Git Maintenance Targets:
+
+	pull
+	    An alias for `git pull'.
+
+	tag
+	    Tag current git revisions with an appropriate tag given the package
+	    name and version in the MANIFEST file.
+
+	forcetag
+	    Like tag but force tagging of files even if already tagged at a
+	    lower revision with the same tag.
+
+	taglist
+	    List tags for the given package name in the MANIFEST file.
+
+Git Addition Targets:
+
+	commit
+	    An alias to `git commit'.
+
+	import
+	    Import current working directory to git.
+

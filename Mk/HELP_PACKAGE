@@ -1,0 +1,21 @@
+Generic Targets:
+   help|targets            Print this text and exit
+   usage                   Print more detailed information on each target
+Package Building Targets:
+   noargs|all              A pseudonym for: dirs symlinks depend package
+   dirs                    Create pre-configured directories, if any
+   symlinks                Create pre-configured symbolic-links, if any
+   depend                  Copy pre-configured file dependencies, if any
+   forcedepend             Like depend, but ignore local modification times
+   package                 Compile MANIFEST into +MANIFEST and generate archive
+Package Maintenance Targets:
+   clean                   Delete generated files, pre-configured symlinks/dirs
+   distclean               Like clean but also deletes the compiled package
+Git Maintenance Targets:
+   pull                    An alias to `git pull'
+   tag                     Tag git revisions given package name in MANIFEST
+   forcetag                Like tag but always update tag to latest revisions
+   taglist                 List tags for the given package name in MANIFEST
+Git Addition Targets:
+   import                  Import current working directory to git
+   commit                  An alias to `git commit'

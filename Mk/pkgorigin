@@ -1,0 +1,61 @@
+#!/bin/sh
+# -*- tab-width: 4 -*- ;; Emacs
+# vi: set noexpandtab  :: Vi/ViM
+############################################################ IDENT(1)
+#
+# $Title: Script for getting the package origin from a BSD-style packing-list $
+# $Copyright: 1999-2017 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/Mk/pkgorigin 2020-05-14 17:55:22 -0700 freebsdfrau $
+#
+############################################################ INFORMATION
+#
+# Usage: pkgorigin PLIST
+#
+############################################################ INCLUDES
+
+progdir="${0%/*}"
+. "$progdir/manifest.subr" || exit
+
+############################################################ GLOBALS
+
+#
+# Global exit status
+#
+SUCCESS=0
+FAILURE=1
+
+#
+# Utility pathnames
+#
+: ${AWK:=awk}
+
+############################################################ MAIN
+
+#
+# Validate number of arguments
+#
+[ $# -gt 0 ] || exit $SUCCESS
+
+#
+# Get the package origin
+#
+FILE="$1"
+case "$FILE" in
+*PLIST|*CONTENTS)
+	$AWK -v regex="^@comment[[:space:]]+ORIGIN:" '
+		sub(regex, "") {
+			gsub(/[[:space:]]+/, "_")
+			print
+			exit found++
+		}
+		END { exit !found }
+	' "$FILE"
+	;;
+*) # MANIFEST
+	manifest_read -r origin "$FILE" || exit
+	echo "$origin"
+esac
+
+################################################################################
+# END
+################################################################################

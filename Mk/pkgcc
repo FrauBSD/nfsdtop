@@ -1,0 +1,613 @@
+#!/bin/sh
+# -*- tab-width: 4 -*- ;; Emacs
+# vi: set noexpandtab  :: Vi/ViM
+############################################################ IDENT(1)
+#
+# $Title: FreeBSD packing-list compiler $
+# $Copyright: 1999-2017 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/Mk/pkgcc 2020-05-14 17:55:22 -0700 freebsdfrau $
+#
+############################################################ INFORMATION
+#
+# Usage: pkgcc [OPTIONS] [input [output]]
+# OPTIONS:
+# 	-d   Debug. Print lots of debugging info to stderr.
+# 	-f   Force. Replace files without prompt.
+# 	-h   Print this message to stderr and exit.
+# 	-k   Keep. Do not delete temporary files.
+# 	-y   Answer yes to the size warning.
+#
+############################################################ INCLUDES
+
+progdir="${0%/*}"
+. "$progdir/manifest.subr" || exit
+
+############################################################ GLOBALS
+
+pgm="${0##*/}" # Program basename
+
+#
+# Global exit status
+#
+SUCCESS=0
+FAILURE=1
+
+#
+# Command-line arguments
+#
+INFILE=
+OUTFILE=
+
+#
+# Command-line options
+#
+DEBUG=		# -d
+FORCE=		# -f
+KEEP=		# -k
+NOWARN=		# -y
+
+#
+# Miscellaneous
+#
+FILES=
+FLATSIZE=0
+MD5_PATTERN='^@comment[[:space:]]+MD5:'
+MISSING=
+NOFLATSIZE=1
+SRCDIR=
+UPDATED=0
+TMPFILE=
+TMPFILE2=
+
+############################################################ FUNCTIONS
+
+# err FORMAT [ARGUMENT ...]
+#
+# Print a message to stderr.
+#
+err()
+{
+	local fmt="$1"
+	shift 1 # fmt
+	[ "$fmt" ] || return $SUCCESS
+	printf "$fmt\n" "$@" >&2
+}
+
+# die [FORMAT [ARGUMENT ...]]
+#
+# Optionally print a message to stderr before exiting with failure status.
+#
+die()
+{
+	err "$@"
+	exit $FAILURE
+}
+
+# usage
+#
+# Prints a short syntax statement and exits.
+#
+usage()
+{
+	local optfmt="\t%-4s %s\n"
+	exec >&2
+	printf "Usage: %s [OPTIONS] [input [output]]\n" "$pgm"
+	printf "OPTIONS:\n"
+	printf "$optfmt" "-d" "Debug. Print lots of debugging info to stderr."
+	printf "$optfmt" "-f" "Force. Replace files without prompt."
+	printf "$optfmt" "-h" "Print this message to stderr and exit."
+	printf "$optfmt" "-k" "Keep. Do not delete temporary files."
+	printf "$optfmt" "-y" "Answer yes to the size warning."
+	die
+}
+
+# md5 [FILE ...]
+#
+# Calculate MD5 message-digest fingerprint (checksum) for file(s) or stdin.
+# NB: Used on systems lacking `md5' but have `md5sum' (e.g., Linux/CYGWIN).
+#
+if ! type md5 > /dev/null 2>&1; then
+md5()
+{
+	local sig retval=$SUCCESS prefix="MD5 (%s) = "
+	if [ $# -eq 0 ]; then
+		prefix=
+		set -- ""
+	fi
+	while [ $# -gt 0 ]; do
+		file="$1"
+		shift
+		if [ "$file" -a ! -e "$file" ]; then
+			echo "md5: $file: No such file or directory" >&2
+			continue
+		elif [ -d "$file" ]; then
+			echo "md5: $file: Is a directory" >&2
+			continue
+		fi
+		if sig=$( md5sum ${file:+"$file"} ); then
+			[ "$prefix" ] && printf "$prefix" "$file"
+			echo ${sig%%[$IFS]*}
+		else
+			retval=$?
+		fi
+	done
+	return $retval
+}
+fi
+
+# sha256 [FILE ...]
+#
+# Calculate SHA256 message-digest fingerprint (checksum) for file(s) or stdin.
+# NB: Used on systems lacking `sha256' but have either `sha256sum' (e.g.,
+# Linux/CYGWIN) or `shasum' (e.g., Darwin).
+#
+if ! type sha256sum > /dev/null 2>&1; then
+sha256sum() { shasum -a 256 "$@"; }
+fi
+if ! type sha256 > /dev/null 2>&1; then
+sha256()
+{
+	local sig retval=$SUCCESS prefix="SHA256 (%s) = "
+	if [ $# -eq 0 ]; then
+		prefix=
+		set -- ""
+	fi
+	while [ $# -gt 0 ]; do
+		file="$1"
+		shift
+		if [ "$file" -a ! -e "$file" ]; then
+			echo "sha256: $file: No such file or directory" >&2
+			continue
+		elif [ -d "$file" ]; then
+			echo "sha256: $file: Is a directory" >&2
+			continue
+		fi
+		if sig=$( sha256sum ${file:+"$file"} ); then
+			[ "$prefix" ] && printf "$prefix" "$file"
+			echo ${sig%%[$IFS]*}
+		else
+			retval=$?
+		fi
+	done
+	return $retval
+}
+fi
+
+# bytesize FILE ...
+#
+# Print file size in bytes to stdout.
+#
+if stat --help > /dev/null 2>&1; then
+bytesize() { stat -c%s "$@"; }
+else
+bytesize() { stat -f%z "$@"; }
+fi
+
+# progress_start DIVISOR
+#
+# Initialize progress indicator.
+#
+progress_init()
+{
+	local div=${1%%[!0-9]}
+	PROGRESS= PROGRESS_PREVIOUS=
+	PROGRESS_NUM=0 PROGRESS_DIV=${div:-1}
+	PROGRESS_DEL= PROGRESS_OUT=
+	progress_update 0
+}
+
+# progress_update [NUMERATOR]
+#
+# Update the progress display.
+#
+progress_update()
+{
+	local num=${1%%[!0-9%+-]*}
+	case "$num" in
+	*%)
+		PROGRESS="${num%?}"
+		;;
+	[+-][1-9]*)
+		PROGRESS_NUM=$(( $PROGRESS_NUM $1 ))
+		PROGRESS=$(( ($PROGRESS_NUM * 100) / $PROGRESS_DIV ))
+		;;
+	*?*)
+		PROGRESS_NUM=$num
+		PROGRESS=$(( ($PROGRESS_NUM * 100) / $PROGRESS_DIV ))
+		;;
+	esac
+	[ "$PROGRESS" = "$PROGRESS_PREVIOUS" ] && return
+	PROGRESS_PREVIOUS="$PROGRESS"
+	PROGRESS_DEL=$( printf "%${#PROGRESS_OUT}s" | sed -e 's/ /\\\b/g' )
+	PROGRESS_OUT=$( printf %3u%% "$PROGRESS" )
+	printf "$PROGRESS_DEL%s" "$PROGRESS_OUT"
+}
+
+# tmpfile
+#
+# Write stdin to temporary file(s). If $key is not `files', write stdin to both
+# $TMPFILE and $TMPFILE2, otherwise only write to $TMPFILE.
+#
+tmpfile()
+{
+	local input="$( cat )"
+	printf "%s" "$input" >> "$TMPFILE" || exit
+	[ "$key" = files ] && return
+	printf "%s" "$input" >> "$TMPFILE2" || exit
+}
+
+# manifest_write_scalar KEY VALUE
+#
+# Write key/value pair to temporary file(s) formatted as JSON scalar.
+#
+manifest_write_scalar()
+{
+	local key="$1" value="$2"
+	case "$key" in
+	flatsize)
+		NOFLATSIZE=
+		return ;;
+	esac
+	if isinteger "$value"; then
+		printf '"%s":%i' "$key" $value
+	else
+		replaceall "$value" "$NL" '\n' value
+		replaceall "$value" "$TAB" '\t' value
+		printf '"%s":"%s"' "$key" "$value"
+	fi | tmpfile
+}
+
+# manifest_write_array KEY
+#
+# Write key array and numbered values to temporary file(s) formatted as JSON
+# array. If key is `files' (case-sensitive), convert to JSON hash with SHA256
+# signature values.
+#
+manifest_write_array()
+{
+	local key="$1"
+	case "$key" in
+	files) printf '"%s":{' "$key" ;; # Convert
+	    *) printf '"%s":[' "$key"
+	esac | tmpfile
+	local i=1 valuei sizei new_sha
+	eval local len=\"\$${key}_len\"
+	while [ $i -le ${len:-0} ]; do
+		case "$key" in files|directories) progress_update +1 ;; esac
+		eval valuei=\"\$${key}_$i\"
+		[ $i -gt 1 ] && printf "," | tmpfile
+		i=$(( $i + 1 ))
+		if [ "$key" != files ]; then
+			printf '"%s"' "$valuei" | tmpfile
+			continue
+		fi
+		new_sha=
+		if [ -L "$SRCDIR/$valuei" ]; then
+			sizei=$( bytesize "$SRCDIR/$valuei" 2> /dev/null )
+			FLATSIZE=$(( $FLATSIZE + ${sizei:-0} ))
+			new_sha=
+		elif [ -e "$SRCDIR/$valuei" ]; then
+			sizei=$( bytesize "$SRCDIR/$valuei" 2> /dev/null )
+			FLATSIZE=$(( $FLATSIZE + ${sizei:-0} ))
+			new_sha=$( sha256 < "$SRCDIR/$valuei" 2> /dev/null )
+		fi
+		[ "$new_sha" ] && new_sha="1\$$new_sha"
+		UPDATED=$(( $UPDATED + 1 ))
+		printf '"%s":"%s"' "$valuei" "$new_sha" | tmpfile
+	done
+	case "$key" in
+	files) printf "}" ;; # Convert
+	*) printf "]"
+	esac | tmpfile
+}
+
+# manifest_write_hash KEY
+#
+# Write key hash and numbered keys/values to temporary file(s) formatted as
+# JSON hash. If key is `files' (case-sensitive), update SHA256 signature
+# values.
+#
+manifest_write_hash()
+{
+	local key="$1"
+	eval local name=\"\$$key\"
+	printf '"%s":{' "$name" | tmpfile
+	local i=1 keyi valuei sizei typei new_sha
+	eval local len=\"\$${key}_len\"
+	while [ $i -le ${len:-0} ]; do
+		case "$key" in files|directories) progress_update +1 ;; esac
+		eval keyi=\"\$${key}_$i\"
+		eval valuei=\"\$${key}_${i}_value\"
+		eval typei=\"\$${key}_${i}_type\"
+		[ $i -gt 1 ] && printf "," | tmpfile
+		if [ "$key" != files ]; then
+			case "$typei" in
+			array) manifest_write_array "$keyi" ;;
+			hash) manifest_write_hash "${key}_$i" ;;
+			*) manifest_write_scalar "$keyi" "$valuei"
+			esac
+			i=$(( $i + 1 ))
+			continue
+		fi
+		new_sha=
+		if [ -e "$SRCDIR/$keyi" ]; then
+			sizei=$( bytesize "$SRCDIR/$keyi" 2> /dev/null )
+			FLATSIZE=$(( $FLATSIZE + ${sizei:-0} ))
+			new_sha=$( sha256 < "$SRCDIR/$valuei" 2> /dev/null )
+		fi
+		[ "$new_sha" = "${valuei#*$}" ] || UPDATED=$(( $UPDATED + 1 ))
+		printf '"%s":"%s"' "$keyi" "1\$$new_sha" | tmpfile
+		i=$(( $i + 1 ))
+	done
+	printf '}' | tmpfile
+}
+
+# success
+#
+# Save temporary file(s) and print success trailer with update statistics.
+#
+success()
+{
+	cat "$TMPFILE" > "$OUTFILE"
+	[ -e "$TMPFILE2" ] && cat "$TMPFILE2" > "$OUTFILE2"
+	local checksums=checksums
+	[ ${UPDATED:=0} -eq 1 ] && checksums=checksum
+	echo "Operation successful. (updated $UPDATED $checksums)"
+}
+
+############################################################ MAIN
+
+#
+# Process command-line options
+#
+while getopts dfhky flag; do
+	case "$flag" in
+	d) DEBUG="$DEBUG${DEBUG:+ }-d" ;;
+	f) FORCE=1 ;;
+	k) KEEP=1 ;;
+	y) NOWARN=1 ;;
+	*) usage # NOTREACHED
+	esac
+done
+shift $(( $OPTIND - 1 ))
+
+#
+# Check for input file path
+#
+INFILE="${1-./+MANIFEST}"
+if [ -d "$INFILE" ]; then
+	INFILE="$INFILE/+MANIFEST"
+	[ -f "$INFILE" ] || INFILE="${INFILE%/*}/+CONTENTS"
+elif [ ! -f "$INFILE" ]; then
+	INFILE="./+CONTENTS"
+fi
+if [ ! -f "$INFILE" ]; then
+	echo "$pgm: $INFILE: No such file or directory"
+	exit $FAILURE
+fi
+
+#
+# Check for output file path
+#
+OUTFILE="${2-$INFILE}"
+if [ -d "$OUTFILE" ]; then
+	case "$INFILE" in
+	*CONTENTS|*PLIST) OUTFILE="$OUTFILE/+CONTENTS" ;;
+	       *MANIFEST) OUTFILE="$OUTFILE/+MANIFEST" ;;
+	esac
+fi
+
+#
+# Get the base directory of the package from the output file path
+#
+[ "$OUTFILE" = "${OUTFILE#*/}" ] && OUTFILE="./$OUTFILE"
+SRCDIR="${OUTFILE%/*}"
+
+#
+# Make a temporary file for the changes to go
+#
+if [ -d /usr/tmp ]; then
+	TMPFILE="/usr/tmp/${INFILE##*/}.$$"
+else
+	TMPFILE="/tmp/${INFILE##*/}.$$"
+fi
+:> "$TMPFILE" || exit
+[ "$KEEP" ] || trap 'rm -f "$TMPFILE" "$TMPFILE2"' EXIT
+
+#
+# [Re-]Compile the packing list
+#
+case "$INFILE" in
+*MANIFEST)
+	TMPFILE2="$TMPFILE-2"
+	OUTFILE2="${OUTFILE%/*}/+COMPACT_MANIFEST"
+	:> "$TMPFILE2" || exit # for +COMPACT_MANIFEST
+
+	# Get the number of items in the file (so we can display progress)
+	manifest_read $DEBUG "$INFILE" || exit
+	set -- $_keys
+	keys=$#
+
+	# Operate on the input file, building-up the temporary file
+	printf "Fixing SHA256 signatures in $INFILE... "
+	progress_init $(( $keys + $files_len + ${directories_len:-0} ))
+
+	n=0 chksha= pct= out=
+	printf "{" | tmpfile
+	while [ $# -gt 0 ]; do
+		key=$1
+		shift
+		eval value=\"\$$key\"
+		eval type=\"\$${key}_type\"
+		case "$type" in
+		array) manifest_write_array "$key" ;;
+		hash) manifest_write_hash "$key" ;;
+		*) manifest_write_scalar "$key" "$value"
+		esac
+		progress_update +1
+		[ $# -gt 0 ] && printf "," | tmpfile
+	done
+	[ ${keys:-0} -gt 0 ] && printf "," | tmpfile
+	unset key
+	printf '"flatsize":%i' $FLATSIZE | tmpfile
+	echo "}" | tmpfile
+	progress_update 100%
+	echo
+
+	;; # *MANIFEST
+
+*CONTENTS|*PLIST)
+	# Get the number of lines in the file (so we can display progress)
+	lines=$( awk -v P="$MD5_PATTERN" '$0!~P{N++}END{print N}' "$INFILE" )
+
+	# Operate on the input file, building-up the temporary file
+	printf "Fixing MD5 signatures in $INFILE... "
+	progress_init $lines
+	chkmd5=
+	while read -r LINE; do
+		# Skip empty lines
+		if [ ! "$LINE" ]; then
+			progress_update +1
+			echo >> "$TMPFILE"
+			continue
+		fi
+
+		# Skip old MD5 lines
+		if old_md5=$( echo "$LINE" | awk -v P="$MD5_PATTERN" '
+			sub(P,""){print;exit ++F}END{exit !F}
+		' ); then
+			# Check if the MD5 changed for statistical purposes
+			[ "$new_md5" != "$old_md5" -a "$chkmd5" ] &&
+				UPDATED=$(( $UPDATED + 1 ))
+			chkmd5=
+			continue
+		fi
+
+		# Remaining line types get copied unmodified
+		echo "$LINE" >> "$TMPFILE"
+		progress_update +1
+
+		# If $chkmd5 is still set, the MD5 was missing
+		[ "$chkmd5" ] && UPDATED=$(( $UPDATED + 1 ))
+
+		# If not a directive type line, add new MD5 signature line
+		case "$LINE" in
+		[@%]*) chkmd5= ;; # Directive line
+		*)
+			printf "@comment MD5:" >> "$TMPFILE"
+			new_md5=
+			if [ -e "$SRCDIR/$LINE" ]; then
+				new_md5=$( md5 < "$SRCDIR/$LINE" 2> /dev/null )
+			fi
+			echo "$new_md5" >> "$TMPFILE"
+			chkmd5=1
+		esac
+	done < "$INFILE"
+	progress_update 100%
+	echo
+
+	;; # *CONTENTS
+esac
+
+#
+# Optionally skip remaining checks
+#
+if [ "$FORCE" ]; then
+	success
+	exit $SUCCESS
+fi
+
+#
+# Check if there were any missing files
+#
+case "$INFILE" in
+*MANIFEST)
+	printf "Reading %s (this may take a while)... " "$TMPFILE"
+	manifest_read $DEBUG -p tmp "$TMPFILE"
+	echo "done."
+	printf "Checking for unlisted files... "
+	progress_init $tmp_files_len
+	i=1
+	while [ $i -le ${tmp_files_len:-0} ]; do
+		eval tmp_files_i=\"\$tmp_files_$i\"
+		eval tmp_files_i_value=\"\$tmp_files_${i}_value\"
+		i=$(( $i + 1 ))
+		FILES="$FILES$tmp_files_i$NL"
+		progress_update +1
+		[ "${tmp_files_i_value#*$}" ] && continue
+		[ -L "$SRCDIR/$tmp_files_i" ] && continue
+		MISSING="$MISSING$tmp_files_i$NL"
+	done
+	progress_update 100%
+	FILES="${FILES%$NL}"
+	MISSING="${MISSING%$NL}"
+	echo
+	;;
+*CONTENTS|*PLIST)
+	printf "Checking for unlisted files... "
+	MISSING=$( awk -v P="$MD5_PATTERN" '
+		file && $0 ~ P "$" { print file; file = ""; next }
+		file = $0 { }
+	' "$TMPFILE" )
+	echo "done."
+	;;
+esac
+
+#
+# Check our work
+#
+case "$INFILE" in
+*MANIFEST)
+	# NB: Should be same number of keys in both files
+	unit=keys
+	orig=$keys
+	new=${tmp_len:-0}
+	[ "$NOFLATSIZE" ] && orig=$(( $orig + 1 ))
+	;;
+*CONTENTS|*PLIST)
+	# NB: Should be same number of lines in both files
+	unit=lines
+	new=$( awk 'END{print NR}' < "$TMPFILE" )
+	orig=$( awk 'END{print NR}' < "$INFILE" )
+	;;
+esac
+if [ "$orig" -eq "$new" ]; then
+	success
+elif [ "$NOWARN" ]; then
+	success
+else
+	echo "Inconsistent output (originally $orig $unit, now $new $unit)!"
+	read -p "Save anyway? [N] " reply
+	case "$reply" in [Yy]|[Yy][Ee][Ss]) success; esac
+fi
+
+#
+# Output a list of missing files if there were any
+#
+if [ "$MISSING" ]; then
+	echo "NOTE: The following files were missing"
+	echo "$MISSING" | awk 'sub(/^/, "\t")'
+fi
+
+#
+# Check for unlisted files
+#
+echo "The following files are not in the packing list..."
+echo "=================================================="
+for f in $( find "$SRCDIR" -type f ! -path "$SRCDIR/+*" ); do
+	f="${f#"$SRCDIR/"}"
+	case "$f" in CVS/*|*/CVS/*) continue; esac # Skip CVS entries
+	case "$INFILE" in
+	*MANIFEST) echo "$FILES" 2> /dev/null |
+		awk -v f="$f" '$0==f||$0=="/"f{exit ++F}END{exit !F}' ;;
+	*CONTENTS|*PLIST)
+		awk -v f="$f" '$0==f{exit ++F}END{exit !F}' "$INFILE" ;;
+	esac || printf "\t%s\n" "$f"
+done
+echo "=================================================="
+
+exit $SUCCESS
+
+################################################################################
+# END
+################################################################################

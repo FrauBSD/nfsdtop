@@ -1,0 +1,20 @@
+Generic Targets:
+   noargs|all|help|targets Print this text and exit
+   usage                   Print more detailed information on each target
+Global Building Targets:
+   all_freebsd             Build all packages
+   depend_freebsd          Perform `make depend' for all packages
+   forcedepend_freebsd     Perform `make forcedepend' for all packages
+Global Maintenance Targets:
+   clean_freebsd           Perform `make clean' for all packags
+   distclean_freebsd       Perform `make distclean' for all packages
+   pull_freebsd            Perform `make pull' for all packages
+   commit_freebsd          Perform `make commit' for all packages
+Git Maintenance Targets:
+   pull                    An alias to `git pull'
+   tag_freebsd             Perform `make tag' for all packages
+   forcetag_freebsd        Perform `make forcetag' for all packages
+   taglist_freebsd         Perform `make taglist' for all packages
+Git Addition Targets:
+   import                  Import current working directory to git
+   commit                  An alias to `git commit'
