@@ -2,7 +2,7 @@
 #
 # $Title: Makefile for installing nfsdtop $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/GNUmakefile 2020-04-17 15:33:25 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/GNUmakefile 2020-05-14 17:46:55 -0700 freebsdfrau $
 #
 ############################################################ CONFIGURATION
 
@@ -28,7 +28,7 @@ all:
 
 install:
 	$(MKDIR_P) $(BINDIR)
-	$(CP_F) $(PROG) $(BINDIR)/
+	$(CP_F) redhat/$(PROG) $(BINDIR)/
 
 uninstall:
 	$(RM_F) $(BINDIR)/$(PROG)
