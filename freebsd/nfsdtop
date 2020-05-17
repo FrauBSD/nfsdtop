@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-14 21:05:26 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-16 18:02:52 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.5.1 $'
+VERSION='$Version: 4.5.2 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -503,10 +503,10 @@ esac
 
 	BEGIN
 	{
+		printf("time|%d\n", walltimestamp / 1000000000);
 		printf("init|"); /* Initialize post-processor */
 		printf("===\n"); /* Clear screen and draw header */
 		printf("info|Sampling data for ${INTERVAL}s (\`-i sec')...\n");
-		printf("time|%d\n", walltimestamp / 1000000000);
 	}
 
 	/************************** READ PROBES **************************/
@@ -625,6 +625,7 @@ ${VIEW_USER:+
 
 	$INTERVAL_PROBE
 	{
+		printf("time|%d\n", walltimestamp / 1000000000);
 		printf("===\n");
 
 ${VIEW_CLIENT:+
@@ -646,7 +647,6 @@ ${VIEW_USER:+
 		trunc(@wr_user);
 }
 
-		printf("time|%d\n", walltimestamp / 1000000000);
 		printf("---\n");
 	}
 
@@ -715,6 +715,7 @@ EOF
 	-v rows=$rows \
 	-v show_bytes=${SHOW_BYTES:-0} \
 	-v stderr=/dev/stderr \
+	-v tm=$( date +%s ) \
 	-v view="$VIEW" \
 	-v wide_view=${WIDE_VIEW:-0} \
 	'####################################### BEGIN
@@ -727,7 +728,6 @@ EOF
 		exit_status = 0 # SUCCESS
 		time_delta = 0 # Calculated
 		samples_left = nsamples
-		srand() # seed clock
 
 		inv	= "\033[7m"
 		noinv	= "\033[27m"
@@ -785,7 +785,6 @@ EOF
 		close(cmd)
 	}
 
-	function _systime() { return srand() }
 	function debug1(fmt,a1) { if (debugger) printf fmt "\n", a1 }
 	function debug2(fmt,a1,a2) { if (debugger) printf fmt "\n", a1, a2 }
 	function buffer_add(text) { BUFFER = BUFFER text }
@@ -935,7 +934,7 @@ EOF
 		buffer_add(sprintf("Interval: %-*s %31s\n",
 			fmtsz - 9 - 2 - 31,
 			sprintf("%.3f", interval) "s",
-			_strftime("%c", tm = _systime())))
+			_strftime("%c", tm)))
 				#  9 = "Interval:"
 				#  2 = number of spaces
 				# 31 = %31s date
@@ -950,8 +949,6 @@ EOF
 
 	function buffer_add_data()
 	{
-		tm = _systime()
-
 		#
 		# Process each requested view
 		#
@@ -1332,7 +1329,7 @@ EOF
 
 	call == "time" {
 		times[1] = times[2]
-		times[2] = $0
+		times[2] = tm = $0
 	}
 
 	################################################## END
