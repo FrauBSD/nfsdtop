@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/redhat/nfsdtop 2020-05-16 18:01:46 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/redhat/nfsdtop 2020-05-16 18:52:26 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.5.1 $'
+VERSION='$Version: 4.5.2 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -866,7 +866,6 @@ EOF
 	-v rows=$rows \
 	-v show_bytes=${SHOW_BYTES:-0} \
 	-v stderr=/dev/stderr \
-	-v tm=$( date +%s ) \
 	-v view="$VIEW" \
 	-v wide_view=${WIDE_VIEW:-0} \
 	'####################################### BEGIN
@@ -879,6 +878,7 @@ EOF
 		exit_status = 0 # SUCCESS
 		time_delta = 0 # Calculated
 		samples_left = nsamples
+		tm = systime()
 
 		inv	= "\033[7m"
 		noinv	= "\033[27m"
