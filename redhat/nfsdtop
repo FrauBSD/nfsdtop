@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/redhat/nfsdtop 2020-05-16 18:52:26 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/redhat/nfsdtop 2020-05-22 18:53:00 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 4.5.2 $'
+VERSION='$Version: 5.0 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -58,7 +58,7 @@ FAILURE=1
 #
 # Command-line options
 #
-COLOR=					# -a
+COLOR=1					# -a
 DEBUG=					# -d
 DEBUGGER=				# -D
 FILTER_CLIENT=				# -C ip
@@ -86,6 +86,7 @@ WIDE_VIEW=				# -w
 # Miscellaneous
 #
 CONS=1
+[ -t 1 ] || CONS= COLOR= # stdout is not a tty
 _FILTER_CLIENT=
 _FILTER_GROUP=
 _FILTER_SERVER=
@@ -138,6 +139,7 @@ usage()
 	printf "$optfmt" "-j" "Output JSON formatted data."
 	printf "$optfmt" "-N num" "Perform num samples and exit."
 	printf "$optfmt" "-n" "Do not attempt to map uid/gid/ip to names."
+	printf "$optfmt" "-o" "Force non-console output."
 	printf "$optfmt" "-P file" \
 		"Group map file. Default \`$DEFAULT_GROUP_MAP'."
 	printf "$optfmt" "-p file" \
@@ -234,7 +236,7 @@ resize()
 #
 # Process command-line options
 #
-while getopts abC:cDdF:fG:ghi:JjN:nP:p:rS:sU:uvw flag; do
+while getopts abC:cDdF:fG:ghi:JjN:noP:p:rS:sU:uvw flag; do
 	case "$flag" in
 	a) COLOR=1 ;;
 	b) SHOW_BYTES=1 ;;
@@ -253,6 +255,7 @@ while getopts abC:cDdF:fG:ghi:JjN:nP:p:rS:sU:uvw flag; do
 	N) [ "$OPTARG" ] || usage "-N option requires an argument" # NOTREACHED
 		NSAMPLES="$OPTARG" ;;
 	n) NO_NAMES=1 ;;
+	o) CONS= COLOR= ;;
 	P) GROUP_MAP="$OPTARG" ;;
 	p) PASSWD_MAP="$OPTARG" ;;
 	r) RAW_VIEW=1 ;;
@@ -294,15 +297,6 @@ if [ ! "$OUTPUT_JSON" ]; then
 	SERVER) VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= VIEW_USER= ;;
 	USER) VIEW_CLIENT= VIEW_FILE= VIEW_GROUP= VIEW_SERVER= ;;
 	esac
-fi
-
-#
-# Process `-a' option
-#
-if [ "$COLOR" ]; then
-	CONS=1
-else
-	[ -t 1 ] || CONS= # stdout is not a tty
 fi
 
 #
@@ -850,7 +844,8 @@ EOF
 	done
 	echo EXIT:$status_collected # Send status to post-processor
 
-} | awk -v cols=$cols \
+} | awk -v color=${COLOR:-0} \
+	-v cols=$cols \
 	-v cons=${CONS:-0} \
 	-v debug=${DEBUG:-0} \
 	-v debugger=${DEBUGGER:-0} \
@@ -949,8 +944,8 @@ EOF
 
 	function info(str)
 	{
-		printf "%sINFO%s %s\n",
-			cons ? magenta : "", cons ? fgreset : "", str > stderr
+		printf "%sINFO%s %s\n", color ? magenta : "",
+			color ? fgreset : "", str > stderr
 		fflush(stderr)
 	}
 
@@ -1007,7 +1002,7 @@ EOF
 		fmt = fmt " %-" vsz "s" # VIEW column
 		fmtsz += 1 + vsz
 		fmt = fmt " %" dsz "s" # TOTAL column
-		if (cons) {
+		if (color) {
 			fmt = fmt " " red "%" dsz "s" # WRITE(IN) column
 		} else {
 			fmt = fmt " %" dsz "s" # WRITE(IN) column
@@ -1017,7 +1012,7 @@ EOF
 		full_bar = bar_size
 		bar_size = int(bar_size / 2)
 		if (bar_size * 2 == full_bar) bar_size--
-		if (cons) {
+		if (color) {
 			fmt = fmt fgreset "|" cyan "%-*s" # read_bar
 		} else {
 			fmt = fmt "|%-*s" # read_bar
@@ -1027,8 +1022,11 @@ EOF
 		fmtsz += 1 + dsz
 		fmt = substr(fmt, 2) # Trim leading space
 		fmtsz -= 1
-		fmt = fmt (cons ? fgreset : "") "\n"
+		fmt = fmt (color ? fgreset : "") "\n"
 
+		#
+		# Redraw console
+		#
 		if (cons) {
 			clear_buffer()
 			buffer_add_data()
@@ -1081,8 +1079,8 @@ EOF
 				#  9 = "Interval:"
 				#  2 = number of spaces
 				# 31 = %31s date
-		prefix = cons ? inv green : ""
-		suffix = cons ? fgreset noinv : ""
+		prefix = color ? inv green : ""
+		suffix = color ? fgreset noinv : ""
 		empty_bar = ""
 		# ST: VIEWS
 		buffer_add1(view, "TOTAL",
@@ -1339,8 +1337,8 @@ EOF
 				read_total, write_total)
 		}
 		if (more = i > 0) buffer_add(sprintf("%s(%d more) ... %s",
-			cons ? inv bold yellow : "", i,
-			cons ? noinv nobold fgreset : ""))
+			color ? inv bold yellow : "", i,
+			color ? noinv nobold fgreset : ""))
 	}
 
 	function process_cred(curview, cred, read_total, write_total,
