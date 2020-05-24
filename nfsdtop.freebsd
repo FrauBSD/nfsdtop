@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop.freebsd 2020-05-23 19:33:23 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop.freebsd 2020-05-23 20:03:45 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 5.2.1 $'
+VERSION='$Version: 5.2.2 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -804,8 +804,6 @@ EOF
 			unredacted_groups = m
 
 			unredacted_clients = "^(CLIENT|total|\\*)$"
-			unredacted_servers = "^(SERVER|total|\\*)$"
-			unredacted_files = "^(FILE|total|\\*)$"
 		}
 	}
 
@@ -858,7 +856,7 @@ EOF
 		return rdata
 	}
 
-	function resize()
+	function resize(        dsz, vsz_fixed, bar_size_fixed)
 	{
 		if (output_json) return
 
@@ -985,12 +983,6 @@ EOF
 				arg1 = get_random(length(arg1))
 		} else if (redact && view == "CLIENT") {
 			if (arg1 !~ unredacted_clients)
-				arg1 = get_random(length(arg1))
-		} else if (redact && view == "SERVER") {
-			if (arg1 !~ unredacted_servers)
-				arg1 = get_random(length(arg1))
-		} else if (redact && view == "FILE") {
-			if (arg1 !~ unredacted_files)
 				arg1 = get_random(length(arg1))
 		}
 		buffer_add(sprintf(prefix fmt suffix, arg1, total, write,
@@ -1320,12 +1312,6 @@ EOF
 					cred = get_random(length(cred))
 			} else if (redact && curview == "client") {
 				if (cred !~ unredacted_clients)
-					cred = get_random(length(cred))
-			} else if (redact && curview == "server") {
-				if (cred !~ unredacted_servers)
-					cred = get_random(length(cred))
-			} else if (redact && curview == "file") {
-				if (cred !~ unredacted_files)
 					cred = get_random(length(cred))
 			}
 			json_out = json_add_str(json_out, curview, cred)
