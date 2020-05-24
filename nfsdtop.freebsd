@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop.freebsd 2020-05-23 20:18:19 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop.freebsd 2020-05-23 20:34:44 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 5.2.4 $'
+VERSION='$Version: 6.0 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -856,7 +856,9 @@ EOF
 		return rdata
 	}
 
-	function resize(        dsz, vsz_fixed, bar_size_fixed)
+	function resize(        dsz, vsz, vsz_fixed, bar_size_fixed,
+		bar_size_fixed_max, bar_size_fixed_min, bar_min1, bar_min2,
+		vsz_cols1, vsz_cols2, vsz_max, vsz_min, wv)
 	{
 		if (output_json) return
 
@@ -864,7 +866,7 @@ EOF
 		# Calculate columns and column widths
 		# ST: VIEWS
 		#
-		# NB: bar_size = size of bar column
+		# NB: bar_size = size of bar column (if shown)
 		# NB: dsz = size of TOTAL, READ(OUT), WRITE(IN) data columns
 		# NB: vsz = size of VIEW column ("view size")
 		#
@@ -874,22 +876,88 @@ EOF
 		# Without -w, make vsz fixed-width and bar_size variable.
 		#
 
-		dsz = show_bytes ? 10 : 12
-		vsz_fixed = show_bytes ? 21 : 15 # VIEW column
-		bar_size_fixed = cols <= 80 ? 11 : 21
+		wv = wide_view
 
-		if (wide_view) {
+		show_bar_column = 1
+		show_rw_columns = 1
+
+		vsz_min = length(view)
+		vsz_max = 15
+
+		dsz = show_bytes ? 10 : 12
+		bar_size_fixed_max = 21
+		bar_size_fixed_min = 11
+
+		#
+		# Calculate minimum terminal width required (bar_min1)
+		# to display small bar (bar_size_fixed_min) and also
+		# minimum terminal width required (bar_min2) to display
+		# larger bar (bar_size_fixed_max).
+		#
+		bar_min1 = 0
+		bar_min1 += vsz_min + 1 # VIEW + space
+		bar_min1 += dsz + 1 # TOTAL + space
+		vsz_cols2 = bar_min1
+		bar_min1 += dsz + 1 # WRITE(IN) + space
+		vsz_cols1 = bar_min2 = bar_min1
+		bar_min1 += bar_size_fixed_min + 1 # small bar + space
+		bar_min2 += bar_size_fixed_max + 1 # bigger bar + space
+		bar_min1 += dsz # READ(OUT)
+		bar_min2 += dsz # READ(OUT)
+		vsz_cols1 += dsz # READ(OUT)
+
+		#
+		# Calculate fixed bar width based on terminal width
+		# NB: Only used in wide-view (-w)
+		# NB: If terminal is too narrow, disable bar/columns
+		#
+		if (cols >= bar_min2) {
+			bar_size_fixed = bar_size_fixed_max
+		} else if (cols >= bar_min1) {
+			bar_size_fixed = bar_size_fixed_min
+		} else {
+			show_bar_column = 0
+			bar_size_fixed = 0
+		}
+
+		#
+		# Calculate fixed-size "VIEW" column width
+		# NB: Unused in wide-view (-w)
+		#
+		vsz_fixed = vsz_min
+		if (cols >= bar_min2) {
+			vsz_fixed += cols - bar_min2
+			if (vsz_fixed > vsz_max)
+				vsz_fixed = vsz_max
+		} else if (cols >= bar_min1) {
+			vsz_fixed += cols - bar_min1
+			if (vsz_fixed > vsz_max)
+				vsz_fixed = vsz_max
+		} else if (cols >= vsz_cols1) {
+			vsz_fixed += cols - vsz_cols1
+		} else if (cols >= vsz_cols2) {
+			show_rw_columns = 0
+			wv = 1
+		} else {
+			show_rw_columns = 0
+		}
+
+		if (wv) {
 			# Fixed-width
 			bar_size = bar_size_fixed
 
 			# Variable-width (%-*s)
 			vsz = cols
 			vsz -= 0 + 1 # %-*s VIEW + space
-			vsz -= dsz + 1 # TOTAL + space
-			vsz -= dsz + 1 # WRITE(IN) + space
-			vsz -= bar_size + 1 # bar + space
-			vsz -= dsz # READ(OUT)
-		} else {
+			vsz -= dsz # TOTAL
+			if (show_rw_columns) {
+				vsz -= 1 + dsz + 1 # space + WRITE(IN) + space
+				if (bar_size > 0) {
+					vsz -= bar_size + 1 # bar + space
+				}
+				vsz -= dsz # READ(OUT)
+			}
+		} else if (show_bar_column) {
 			# Fixed-width
 			vsz = vsz_fixed
 
@@ -900,6 +968,9 @@ EOF
 			bar_size -= dsz + 1 # WRITE(IN) + space
 			bar_size -= 0 + 1 # variable-width bar + space
 			bar_size -= dsz # READ(OUT)
+		} else {
+			# Fixed-width
+			vsz = vsz_fixed
 		}
 
 		#
@@ -913,29 +984,45 @@ EOF
 		fmt = fmt " %-" vsz "s" # VIEW
 		fmtsz += 1 + vsz
 		fmt = fmt " %" dsz "s" # TOTAL
+		fmtsz += 1 + dsz
 		if (color) {
 			fmt = fmt " " red "%" dsz "s" # WRITE(IN)
 		} else {
 			fmt = fmt " %" dsz "s" # WRITE(IN)
 		}
-		fmtsz += 1 + dsz + 1 + dsz
-
-		full_bar = bar_size
-		bar_size = int(bar_size / 2)
-		if (bar_size * 2 == full_bar) bar_size--
-		fmt = fmt " %*s" # write_bar
-		if (color) {
-			fmt = fmt fgreset "|" cyan "%-*s" # read_bar
-		} else {
-			fmt = fmt "|%-*s" # read_bar
-		}
-		fmtsz += 1 + bar_size + 1 + bar_size
-		fmt = fmt " %-" dsz "s" # READ(OUT)
 		fmtsz += 1 + dsz
+
+		if (show_bar_column) {
+			full_bar = bar_size
+			bar_size = int(bar_size / 2)
+			if (bar_size * 2 == full_bar) bar_size--
+			fmt = fmt " %*s" # write_bar
+			if (color) {
+				fmt = fmt fgreset "|" cyan "%-*s" # read_bar
+			} else {
+				fmt = fmt "|%-*s" # read_bar
+			}
+			fmtsz += 1 + bar_size + 1 + bar_size
+			fmt = fmt " %-" dsz "s" # READ(OUT)
+			fmtsz += 1 + dsz
+		} else if (show_rw_columns) {
+			if (color) {
+				fmt = fmt " " cyan "%" dsz "s" # READ(OUT)
+			} else {
+				fmt = fmt " %" dsz "s" # READ(OUT)
+			}
+			fmtsz += 1 + dsz
+		}
 
 		fmt = substr(fmt, 2) # Trim leading space
 		fmtsz -= 1
 		fmt = fmt (color ? fgreset : "") "\n"
+
+		#
+		# Export calculated column sizes for things we truncate
+		#
+		delete csz
+		csz["view"] = vsz
 
 		#
 		# Redraw console
@@ -974,7 +1061,7 @@ EOF
 	}
 
 	function buffer_add1(arg1, total, read, read_bar, write_bar,
-		write, prefix, suffix)
+		write, prefix, suffix,        str)
 	{
 		if (redact && view == "USER") {
 			if (arg1 !~ unredacted_users)
@@ -986,11 +1073,20 @@ EOF
 			if (arg1 !~ unredacted_clients)
 				arg1 = get_random(length(arg1))
 		}
-		if (length(arg1) > vsz) {
-			arg1 = substr(arg1, 1, vsz)
+		if (length(arg1) > csz["view"]) {
+			arg1 = substr(arg1, 1, csz["view"])
 		}
-		buffer_add(sprintf(prefix fmt suffix, arg1, total, write,
-			bar_size, write_bar, bar_size, read_bar, read))
+
+		if (show_bar_column) {
+			str = sprintf(fmt, arg1, total, write, bar_size,
+				write_bar, bar_size, read_bar, read)
+		} else {
+			str = sprintf(fmt, arg1, total, write, read)
+		}
+		if (cols < fmtsz) {
+			str = substr(str, 1, cols) (str ~ /\n$/ ? "\n" : "")
+		}
+		buffer_add(prefix str suffix)
 	}
 
 	function _strftime(fmt, tm,        cmd)
@@ -1003,16 +1099,33 @@ EOF
 		return _strftime_dt
 	}
 
-	function buffer_add_header(        prefix, suffix)
+	function buffer_add_header(        prefix, suffix,
+		presz, n, fmt, dtfmt, dtsz, ifmt, sz, str)
 	{
 		if (output_json) return
-		buffer_add(sprintf("Interval: %-*s %31s\n",
-			fmtsz - 9 - 2 - 31,
-			sprintf("%.3f", interval) "s",
-			_strftime("%c", tm)))
-				#  9 = "Interval:"
-				#  2 = number of spaces
-				# 31 = %31s date
+		ifmt = "%.3fs"
+		presz = 9 + 1 + length(sprintf(ifmt, interval))
+			#  9 = "Interval:"
+			#  1 = number of spaces
+		sz = cols < fmtsz ? cols : fmtsz
+		for (n = split("|%T|%F %T|%c", fmt, /\|/); n > 0; n--) {
+			dtfmt = fmt[n]
+			dtsz = dtfmt == "" ? 0 : length(_strftime(dtfmt, tm))
+			if (sz >= presz + 1 + dtsz) break
+		}
+		if (dtfmt == "") {
+			str = sprintf("Interval: " ifmt, interval)
+			if (length(str) > sz) {
+				str = substr(str, 1, sz)
+			}
+			buffer_add(str "\n")
+		} else {
+			buffer_add(sprintf("Interval: %-*s %*s\n",
+				sz - 9 - 2 - dtsz, sprintf(ifmt, interval),
+				dtsz, _strftime(dtfmt, tm)))
+					#  9 = "Interval:"
+					#  2 = number of spaces
+		}
 		prefix = color ? inv green : ""
 		suffix = color ? fgreset noinv : ""
 		empty_bar = ""
