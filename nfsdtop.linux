@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop.linux 2020-05-23 19:33:23 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop.linux 2020-05-23 20:00:11 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 5.2.1 $'
+VERSION='$Version: 5.2.2 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -1009,7 +1009,7 @@ EOF
 		return rdata
 	}
 
-	function resize()
+	function resize(        dsz, vsz_fixed, bar_size_fixed)
 	{
 		if (output_json) return
 
