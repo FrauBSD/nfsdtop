@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop.freebsd 2020-05-23 20:13:10 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop.freebsd 2020-05-23 20:18:19 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 5.2.3 $'
+VERSION='$Version: 5.2.4 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -884,7 +884,7 @@ EOF
 
 			# Variable-width (%-*s)
 			vsz = cols
-			vsz -= 0 + 1 # variable-width VIEW + space
+			vsz -= 0 + 1 # %-*s VIEW + space
 			vsz -= dsz + 1 # TOTAL + space
 			vsz -= dsz + 1 # WRITE(IN) + space
 			vsz -= bar_size + 1 # bar + space
@@ -919,17 +919,18 @@ EOF
 			fmt = fmt " %" dsz "s" # WRITE(IN)
 		}
 		fmtsz += 1 + dsz + 1 + dsz
-		fmt = fmt " %*s" # write_bar
+
 		full_bar = bar_size
 		bar_size = int(bar_size / 2)
 		if (bar_size * 2 == full_bar) bar_size--
+		fmt = fmt " %*s" # write_bar
 		if (color) {
 			fmt = fmt fgreset "|" cyan "%-*s" # read_bar
 		} else {
 			fmt = fmt "|%-*s" # read_bar
 		}
 		fmtsz += 1 + bar_size + 1 + bar_size
-		fmt = fmt " %-" dsz "s" # READ(OUT) column
+		fmt = fmt " %-" dsz "s" # READ(OUT)
 		fmtsz += 1 + dsz
 
 		fmt = substr(fmt, 2) # Trim leading space
