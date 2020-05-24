@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop.linux 2020-05-23 19:27:04 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop.linux 2020-05-23 19:33:23 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 5.2 $'
+VERSION='$Version: 5.2.1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -1018,7 +1018,7 @@ EOF
 		# ST: VIEWS
 		#
 		# NB: bar_size = size of bar column
-		# NB: dsz = size of TOTAL, READ(IN), WRITE(OUT) data columns
+		# NB: dsz = size of TOTAL, READ(OUT), WRITE(IN) data columns
 		# NB: vsz = size of VIEW column ("view size")
 		#
 		# If given -w (wide view) make bar_size fixed-width and
@@ -1026,9 +1026,11 @@ EOF
 		#
 		# Without -w, make vsz fixed-width and bar_size variable.
 		#
+
 		dsz = show_bytes ? 10 : 12
 		vsz_fixed = show_bytes ? 21 : 15 # VIEW column
 		bar_size_fixed = cols <= 80 ? 11 : 21
+
 		if (wide_view) {
 			# Fixed-width
 			bar_size = bar_size_fixed
@@ -1046,7 +1048,7 @@ EOF
 
 			# Variable-width (%-*s)
 			bar_size = cols
-			bar_size -= vsz + 1 # VIEW + space
+			bar_size -= vsz + 1 # %[-]*s VIEW + space
 			bar_size -= dsz + 1 # TOTAL + space
 			bar_size -= dsz + 1 # WRITE(IN) + space
 			bar_size -= 0 + 1 # variable-width bar + space
@@ -1057,15 +1059,17 @@ EOF
 		# Calculate format and line width
 		# ST: VIEWS
 		#
+
 		fmt = ""
 		fmtsz = 0
-		fmt = fmt " %-" vsz "s" # VIEW column
+
+		fmt = fmt " %-" vsz "s" # VIEW
 		fmtsz += 1 + vsz
-		fmt = fmt " %" dsz "s" # TOTAL column
+		fmt = fmt " %" dsz "s" # TOTAL
 		if (color) {
-			fmt = fmt " " red "%" dsz "s" # WRITE(IN) column
+			fmt = fmt " " red "%" dsz "s" # WRITE(IN)
 		} else {
-			fmt = fmt " %" dsz "s" # WRITE(IN) column
+			fmt = fmt " %" dsz "s" # WRITE(IN)
 		}
 		fmtsz += 1 + dsz + 1 + dsz
 		fmt = fmt " %*s" # write_bar
@@ -1080,6 +1084,7 @@ EOF
 		fmtsz += 1 + bar_size + 1 + bar_size
 		fmt = fmt " %-" dsz "s" # READ(OUT) column
 		fmtsz += 1 + dsz
+
 		fmt = substr(fmt, 2) # Trim leading space
 		fmtsz -= 1
 		fmt = fmt (color ? fgreset : "") "\n"
