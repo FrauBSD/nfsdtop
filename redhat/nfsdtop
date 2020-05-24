@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/redhat/nfsdtop 2020-05-22 18:53:00 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/redhat/nfsdtop 2020-05-23 19:05:43 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 5.0 $'
+VERSION='$Version: 5.1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -73,6 +73,7 @@ NO_NAMES=				# -n
 NSAMPLES=				# -N num
 OUTPUT_JSON=				# -j
 PASSWD_MAP="$DEFAULT_PASSWD_MAP"	# -p file
+QUIET=					# -q
 RAW_VIEW=				# -r
 SHOW_BYTES=				# -b
 VIEW_CLIENT=				# -c
@@ -144,6 +145,7 @@ usage()
 		"Group map file. Default \`$DEFAULT_GROUP_MAP'."
 	printf "$optfmt" "-p file" \
 		"User map file. Default \`$DEFAULT_PASSWD_MAP'."
+	printf "$optfmt" "-q" "Quiet. Hide informational messages."
 	printf "$optfmt" "-r" "Raw view. Do not format output of bpftrace."
 	printf "$optfmt" "-S ip" "Server filtter (IPv4 only)."
 	printf "$optfmt" "-s" "View read/write activity by server."
@@ -236,7 +238,7 @@ resize()
 #
 # Process command-line options
 #
-while getopts abC:cDdF:fG:ghi:JjN:noP:p:rS:sU:uvw flag; do
+while getopts abC:cDdF:fG:ghi:JjN:noP:p:qrS:sU:uvw flag; do
 	case "$flag" in
 	a) COLOR=1 ;;
 	b) SHOW_BYTES=1 ;;
@@ -258,6 +260,7 @@ while getopts abC:cDdF:fG:ghi:JjN:noP:p:rS:sU:uvw flag; do
 	o) CONS= COLOR= ;;
 	P) GROUP_MAP="$OPTARG" ;;
 	p) PASSWD_MAP="$OPTARG" ;;
+	q) QUIET=1 ;;
 	r) RAW_VIEW=1 ;;
 	S) FILTER_SERVER="$OPTARG" ;;
 	s) VIEW=SERVER VIEW_SERVER=1 ;;
@@ -856,6 +859,7 @@ EOF
 	-v no_names=${NO_NAMES:-0} \
 	-v nsamples=${NSAMPLES:-0} \
 	-v output_json=${OUTPUT_JSON:-0} \
+	-v quiet=${QUIET:-0} \
 	-v passwd_map="$PASSWD_MAP" \
 	-v raw_view=${RAW_VIEW:-0} \
 	-v rows=$rows \
@@ -944,6 +948,7 @@ EOF
 
 	function info(str)
 	{
+		if (quiet) return
 		printf "%sINFO%s %s\n", color ? magenta : "",
 			color ? fgreset : "", str > stderr
 		fflush(stderr)
