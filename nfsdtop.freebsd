@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/freebsd/nfsdtop 2020-05-23 19:05:43 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop.freebsd 2020-05-23 19:27:04 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 5.1 $'
+VERSION='$Version: 5.2 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -73,6 +73,7 @@ OUTPUT_JSON=				# -j
 PASSWD_MAP="$DEFAULT_PASSWD_MAP"	# -p file
 QUIET=					# -q
 RAW_VIEW=				# -r
+REDACT=${NFSDTOP_REDACT:+1}		# -R
 SHOW_BYTES=				# -b
 VIEW_CLIENT=				# -c
 VIEW_GROUP=				# -g
@@ -138,6 +139,7 @@ usage()
 	printf "$optfmt" "-p file" \
 		"User map file. Default \`$DEFAULT_PASSWD_MAP'."
 	printf "$optfmt" "-q" "Quiet. Hide informational messages."
+	printf "$optfmt" "-R" "Redact potentially sensitive information."
 	printf "$optfmt" "-r" "Raw view. Do not format output of dtrace."
 	printf "$optfmt" "-U user" "User filter (name or id)."
 	printf "$optfmt" "-u" "View read/write activity by user (default)."
@@ -217,7 +219,7 @@ resize()
 #
 # Process command-line options
 #
-while getopts abC:cDdG:ghi:JjN:noP:p:qrU:uvw flag; do
+while getopts abC:cDdG:ghi:JjN:noP:p:qRrU:uvw flag; do
 	case "$flag" in
 	a) COLOR=1 ;;
 	b) SHOW_BYTES=1 ;;
@@ -238,6 +240,7 @@ while getopts abC:cDdG:ghi:JjN:noP:p:qrU:uvw flag; do
 	P) GROUP_MAP="$OPTARG" ;;
 	p) PASSWD_MAP="$OPTARG" ;;
 	q) QUIET=1 ;;
+	R) REDACT=1 ;;
 	r) RAW_VIEW=1 ;;
 	U) FILTER_USER="$OPTARG" ;;
 	u) VIEW=USER VIEW_USER=1 ;;
@@ -711,6 +714,7 @@ EOF
 	-v quiet=${QUIET:-0} \
 	-v passwd_map="$PASSWD_MAP" \
 	-v raw_view=${RAW_VIEW:-0} \
+	-v redact=${REDACT:-0} \
 	-v rows=$rows \
 	-v show_bytes=${SHOW_BYTES:-0} \
 	-v stderr=/dev/stderr \
@@ -769,6 +773,40 @@ EOF
 
 		# Declare arrays
 		delete times
+
+		if (redact) {
+			m = "^(USER|total|"
+			if ((u = ENVIRON["USER"]) != "")
+				m = m u "|"
+			if ((s = ENVIRON["SUDO_USER"]) != "" && s != u)
+				m = m s "|"
+			cmd = "getent passwd 2> /dev/null"
+			while (cmd | getline > 0) {
+				if (split($0, f, /:/) < 3) continue
+				if (f[3] > 1024 && f[3] !~ /^6553[456]$/)
+					continue
+				m = m f[1] "|"
+			}
+			close(cmd)
+			m = m "\\*)$"
+			unredacted_users = m
+
+			m = "^(GROUP|total|"
+			cmd = "getent group 2> /dev/null"
+			while (cmd | getline > 0) {
+				if (split($0, f, /:/) < 3) continue
+				if (f[3] > 1024 && f[3] !~ /^6553[456]$/)
+					continue
+				m = m f[1] "|"
+			}
+			close(cmd)
+			m = m "\\*)$"
+			unredacted_groups = m
+
+			unredacted_clients = "^(CLIENT|total|\\*)$"
+			unredacted_servers = "^(SERVER|total|\\*)$"
+			unredacted_files = "^(FILE|total|\\*)$"
+		}
 	}
 
 	######################################## FUNCTIONS
@@ -801,6 +839,23 @@ EOF
 		printf "%sINFO%s %s\n", color ? magenta : "",
 			color ? fgreset : "", str > stderr
 		fflush(stderr)
+	}
+
+	function get_random(len,        c, n, r, rdata, rfile, rlen)
+	{
+		if (len < 1) return ""
+		rlen = 0
+		rdata = ""
+		rfile = "/dev/urandom"
+		while (length(rdata) < len && getline r < rfile > 0) {
+			for (n = split(r, c, ""); n >= 1; n--) {
+				if (c[n] !~ /[\x41-\x5a]/) continue
+				rdata = rdata c[n]
+				if (++rlen == len) break
+			}
+		}
+		close(rfile)
+		return rdata
 	}
 
 	function resize()
@@ -917,6 +972,22 @@ EOF
 	function buffer_add1(arg1, total, read, read_bar, write_bar,
 		write, prefix, suffix)
 	{
+		if (redact && view == "USER") {
+			if (arg1 !~ unredacted_users)
+				arg1 = get_random(length(arg1))
+		} else if (redact && view == "GROUP") {
+			if (arg1 !~ unredacted_groups)
+				arg1 = get_random(length(arg1))
+		} else if (redact && view == "CLIENT") {
+			if (arg1 !~ unredacted_clients)
+				arg1 = get_random(length(arg1))
+		} else if (redact && view == "SERVER") {
+			if (arg1 !~ unredacted_servers)
+				arg1 = get_random(length(arg1))
+		} else if (redact && view == "FILE") {
+			if (arg1 !~ unredacted_files)
+				arg1 = get_random(length(arg1))
+		}
 		buffer_add(sprintf(prefix fmt suffix, arg1, total, write,
 			bar_size, write_bar, bar_size, read_bar, read))
 	}
@@ -1236,6 +1307,22 @@ EOF
 			json_out = ""
 			json_out = json_add_uint(json_out, "time", tm)
 			json_out = json_add_str(json_out, "ident", curview)
+			if (redact && curview == "user") {
+				if (cred !~ unredacted_users)
+					cred = get_random(length(cred))
+			} else if (redact && curview == "group") {
+				if (cred !~ unredacted_groups)
+					cred = get_random(length(cred))
+			} else if (redact && curview == "client") {
+				if (cred !~ unredacted_clients)
+					cred = get_random(length(cred))
+			} else if (redact && curview == "server") {
+				if (cred !~ unredacted_servers)
+					cred = get_random(length(cred))
+			} else if (redact && curview == "file") {
+				if (cred !~ unredacted_files)
+					cred = get_random(length(cred))
+			}
 			json_out = json_add_str(json_out, curview, cred)
 			json_out = json_add_uint(json_out,
 				"total_bytes", cred_rw)
