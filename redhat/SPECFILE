@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 5.2
+Version: 5.2.1
 Release: 1
 Buildarch: noarch
 
@@ -76,6 +76,8 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Sat May 23 2020 Devin Teske <dteske@fraubsd.org> 5.2.1-1
+- 32780cc Comments and whitespace
 * Sat May 23 2020 Devin Teske <dteske@fraubsd.org> 5.2-1
 - 293f262 Add -R to redact info for demos
 * Sat May 23 2020 Devin Teske <dteske@fraubsd.org> 5.1-1
