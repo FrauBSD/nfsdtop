@@ -2,7 +2,7 @@
 #
 # $Title: Makefile for installing nfsdtop on FreeBSD $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/Makefile 2020-05-14 17:51:25 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/Makefile 2020-05-23 19:12:14 -0700 freebsdfrau $
 #
 ############################################################ CONFIGURATION
 
@@ -18,6 +18,7 @@ RM_F=		rm -f
 ############################################################ OBJECTS
 
 PROG=		nfsdtop
+SRC=		nfsdtop.freebsd
 
 ############################################################ TARGETS
 
@@ -28,7 +29,7 @@ all:
 
 install:
 	$(MKDIR_P) $(BINDIR)
-	$(CP_F) freebsd/$(PROG) $(BINDIR)/
+	$(CP_F) $(SRC) $(BINDIR)/$(PROG)
 
 uninstall:
 	$(RM_F) $(BINDIR)/$(PROG)
