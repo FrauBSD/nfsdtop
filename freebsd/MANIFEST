@@ -34,6 +34,7 @@ WWW: https://www.fraubsd.org/nfsdtop",
 
 	"directories":{
 		"/usr/bin":"y",
+		"/usr":"y",
 	},
 }
 ////////////////////////////////////////////////////////////////////////////////
@@ -41,6 +42,6 @@ WWW: https://www.fraubsd.org/nfsdtop",
 ////////////////////////////////////////////////////////////////////////////////
 //
 // $Copyright: 2016-2020 The FrauBSD Project. All rights reserved. $
-// $FrauBSD: nfsdtop/freebsd/MANIFEST 2020-05-23 20:35:38 -0700 freebsdfrau $
+// $FrauBSD: nfsdtop/freebsd/MANIFEST 2020-05-23 21:05:38 -0700 freebsdfrau $
 //
 ////////////////////////////////////////////////////////////////////////////////
