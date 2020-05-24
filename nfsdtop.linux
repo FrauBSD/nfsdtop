@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop.linux 2020-05-23 20:00:11 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop.linux 2020-05-23 20:13:10 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 5.2.2 $'
+VERSION='$Version: 5.2.3 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -1146,6 +1146,13 @@ EOF
 			if (arg1 !~ unredacted_files)
 				arg1 = get_random(length(arg1))
 		}
+		if (length(arg1) > vsz) {
+			if (view == "FILE")
+				arg1 = "..." substr(arg1,
+					length(arg1) - vsz + 4)
+			else
+				arg1 = substr(arg1, 1, vsz)
+		}
 		buffer_add(sprintf(prefix fmt suffix, arg1, total, write,
 			bar_size, write_bar, bar_size, read_bar, read))
 	}
@@ -1505,25 +1512,11 @@ EOF
 			buffer_add("{" json_out "}\n")
 		} else if (show_bytes) {
 			# ST: VIEWDATA
-			if (length(cred) > vsz) {
-				if (curview == "file")
-					cred = "..." substr(cred,
-						length(cred) - vsz + 4)
-				else
-					cred = substr(cred, 1, vsz)
-			}
 			buffer_add1(cred, humanize(cred_rw),
 				humanize(cred_read), read_bar,
 				write_bar, humanize(cred_write))
 		} else {
 			# ST: VIEWDATA
-			if (length(cred) > vsz) {
-				if (curview == "file")
-					cred = "..." substr(cred,
-						length(cred) - vsz + 4)
-				else
-					cred = substr(cred, 1, vsz)
-			}
 			buffer_add1(cred, humanize(rw_rate),
 				humanize(read_rate), read_bar,
 				write_bar, humanize(write_rate))
