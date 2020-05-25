@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 6.0
+Version: 6.0.1
 Release: 1
 Buildarch: noarch
 
@@ -76,6 +76,8 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Sun May 24 2020 Devin Teske <dteske@fraubsd.org> 6.0.1-1
+- ae42c1d Fix extra newline with -j/-J and -o
 * Sat May 23 2020 Devin Teske <dteske@fraubsd.org> 6.0-1
 - 3fed3df Improve support for live terminal resizing
 * Sat May 23 2020 Devin Teske <dteske@fraubsd.org> 5.2.4-1
