@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop.freebsd 2020-05-24 17:21:17 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop.freebsd 2020-05-28 20:11:41 +0000 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 6.0.1 $'
+VERSION='$Version: 6.1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -444,7 +444,7 @@ esac
 # ST: PRE
 #
 {
-	trap resize SIGWINCH
+	trap resize WINCH # ST: SIGWINCH
 
 	#
 	# Start background dtrace
