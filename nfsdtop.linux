@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop.linux 2020-05-28 20:11:41 +0000 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop.linux 2020-06-28 12:00:09 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -45,7 +45,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 6.1 $'
+VERSION='$Version: 6.1.1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -228,7 +228,7 @@ resize()
 {
 	local size
 	if [ -e /dev/tty ]; then
-		size=$( stty size < /dev/tty 2> /dev/null )
+		size=$( { stty size < /dev/tty; } 2> /dev/null )
 	else
 		size=$( stty size 2> /dev/null )
 	fi
