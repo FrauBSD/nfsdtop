@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 6.1.1
+Version: 7.0
 Release: 1
 Buildarch: noarch
 
@@ -76,6 +76,8 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Sat Jul  4 2020 Devin Teske <dteske@fraubsd.org> 7.0-1
+- d89ce02 Add -m/-M for metadata mode, -k for sorting
 * Sun Jun 28 2020 Devin Teske <dteske@fraubsd.org> 6.1.1-1
 - 8f8d509 Fix `line 231: /dev/tty: No such device or address'
 * Thu May 28 2020 Devin Teske <dteske@fraubsd.org> 6.1-1
