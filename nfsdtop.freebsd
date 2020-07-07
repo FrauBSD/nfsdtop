@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop.freebsd 2020-07-06 18:04:26 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop.freebsd 2020-07-06 18:22:12 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -47,7 +47,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 6.1.2 $'
+VERSION='$Version: 6.1.3 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -991,10 +991,11 @@ EOF
 		fmtsz += 1 + vsz
 		fmt = fmt " %" dsz "s" # TOTAL
 		fmtsz += 1 + dsz
+		# WRITE(IN)
 		if (color) {
-			fmt = fmt " " red "%" dsz "s" # WRITE(IN)
+			fmt = fmt " " red "%" dsz "s"
 		} else {
-			fmt = fmt " %" dsz "s" # WRITE(IN)
+			fmt = fmt " %" dsz "s"
 		}
 		fmtsz += 1 + dsz
 
@@ -1002,7 +1003,7 @@ EOF
 			full_bar = bar_size
 			bar_size = int(bar_size / 2)
 			if (bar_size * 2 == full_bar) bar_size--
-			fmt = fmt " %*s" # write_bar
+			fmt = fmt " %*s" # write bar
 			# read bar
 			if (color) {
 				fmt = fmt fgreset "|" cyan "%-*s"
