@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop.linux 2020-07-04 17:38:54 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop.linux 2020-07-06 18:05:10 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -39,8 +39,13 @@
 
 DEFAULT_INTERVAL=2.0 # seconds
 
+#
+# Sorting choices (case-insensitive):
+# 	total (in any mode; default sort column)
+# 	read write in out (without `-m')
+# 	good fail (with `-m')
+#
 DEFAULT_SORT=total
-	# Choices (case-insensitive): total read write in out good fail
 
 #
 # User/Group map files
@@ -55,7 +60,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 7.0 $'
+VERSION='$Version: 7.0.1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -139,7 +144,7 @@ usage()
 	printf "Usage: %s [OPTIONS]\n" "$pgm"
 	printf "Options:\n"
 	printf "$optfmt" "-a" "Always enable color."
-	printf "$optfmt" "-b" "Show bytes instead of bandwidth."
+	printf "$optfmt" "-b" "Show basic counts instead of rates."
 	printf "$optfmt" "-C ip" "Client filter (IPv4 only)."
 	printf "$optfmt" "-c" "View read/write activity by client."
 	printf "$optfmt" "-D" "Enable debugger."
@@ -1379,9 +1384,9 @@ EOF
 		} else if (cols >= vsz_cols1) {
 			vsz_fixed += cols - vsz_cols1
 		} else if (cols >= vsz_cols2) {
-			if (mode ==  "data") {
+			if (mode == "data") {
 				show_rw_columns = 0
-			} else if (mode ==  "meta") {
+			} else if (mode == "meta") {
 				show_stat_columns = 0
 			}
 			wv = 1
@@ -1408,7 +1413,7 @@ EOF
 				if (bar_size > 0) {
 					vsz -= bar_size + 1 # bar + space
 				}
-			vsz -= dsz # READ(OUT)/STAT(FAIL)
+				vsz -= dsz # READ(OUT)/STAT(FAIL)
 			}
 		} else if (show_bar_column) {
 			# Fixed-width
@@ -1525,8 +1530,8 @@ EOF
 		buffer_add_header()
 	}
 
-	function buffer_add1(arg1, total, read, read_bar, write_bar,
-		write, prefix, suffix,        str)
+	function buffer_add1(arg1, total, value1, bar1, bar2,
+		value2, prefix, suffix,        str)
 	{
 		if (redact && view == "USER") {
 			if (arg1 !~ unredacted_users)
@@ -1553,10 +1558,10 @@ EOF
 		}
 
 		if (show_bar_column) {
-			str = sprintf(fmt, arg1, total, write, bar_size,
-				write_bar, bar_size, read_bar, read)
+			str = sprintf(fmt, arg1, total, value2, bar_size,
+				bar2, bar_size, bar1, value1)
 		} else {
-			str = sprintf(fmt, arg1, total, write, read)
+			str = sprintf(fmt, arg1, total, value2, value1)
 		}
 		if (cols < fmtsz) {
 			str = substr(str, 1, cols) (str ~ /\n$/ ? "\n" : "")
@@ -1829,6 +1834,9 @@ EOF
 		read_bar, read_rate, read_total,
 		write_bar, write_rate, write_total,
 		rw_rate, rw_total,
+		stat_good_bar, stat_good_rate,
+		stat_fail_bar, stat_fail_rate,
+		stat_all_rate, stat_all_total,
 		_keys_sorted, cred, i, v, r, n, table_rows)
 	{
 		time_delta = times[2] - times[1]
@@ -1912,9 +1920,11 @@ EOF
 			# ST: VIEWS
 			buffer_add1("total",
 				humanize(rw_rate),
-				humanize(read_rate), read_bar,
-				write_bar, humanize(write_rate))
+				humanize(read_rate),
+				read_bar, write_bar,
+				humanize(write_rate))
 		} else if (mode == "meta") {
+			# ST: VIEWS
 			buffer_add1("total",
 				humanize(stat_all_rate),
 				humanize(stat_good_rate),
@@ -1972,7 +1982,7 @@ EOF
 		read_total, write_total,
 		cred_read, read_bar, read_bar_pct, read_bar_size, read_rate,
 		cred_write, write_bar, write_bar_pct, write_bar_size,
-		write_rate, cred_rw, rw_rate, pch, _cred, key,
+		write_rate, cred_rw, rw_rate, pch, _cred,
 		good_total, fail_total,
 		cred_good, good_bar, good_bar_pct, good_bar_size, good_rate,
 		cred_fail, fail_bar, fail_bar_pct, fail_bar_size,
