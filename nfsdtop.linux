@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop.linux 2020-07-06 18:05:10 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop.linux 2020-07-06 18:22:42 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -60,7 +60,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 7.0.1 $'
+VERSION='$Version: 7.0.2 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -1443,10 +1443,11 @@ EOF
 		fmtsz += 1 + vsz
 		fmt = fmt " %" dsz "s" # TOTAL
 		fmtsz += 1 + dsz
+		# WRITE(IN)/STAT(FAIL)
 		if (color) {
-			fmt = fmt " " red "%" dsz "s" # WRITE(IN)/STAT(FAIL)
+			fmt = fmt " " red "%" dsz "s"
 		} else {
-			fmt = fmt " %" dsz "s" # WRITE(IN)/STAT(GOOD)
+			fmt = fmt " %" dsz "s"
 		}
 		fmtsz += 1 + dsz
 
@@ -1454,7 +1455,7 @@ EOF
 			full_bar = bar_size
 			bar_size = int(bar_size / 2)
 			if (bar_size * 2 == full_bar) bar_size--
-			fmt = fmt " %*s" # write_bar
+			fmt = fmt " %*s" # write/ok bar
 			# read/fail bar
 			if (color) {
 				fmt = fmt fgreset "|" cyan "%-*s"
@@ -1570,7 +1571,7 @@ EOF
 	}
 
 	function buffer_add_header(        prefix, suffix,
-		presz, n, fmt, dtfmt, dtsz, ifmt, sz, str)
+		presz, n, fmt, dtfmt, dtsz, ifmt, sz, str, colnam1, colnam2)
 	{
 		if (output_json) return
 		ifmt = "%.3fs"
