@@ -10,7 +10,7 @@
 
 	"comment":"Display top I/O on NFS servers using DTrace",
 	"licenselogic":"single",
-	"version":"6.1.1",
+	"version":"6.1.2",
 
 	"maintainer":"dteske@freebsd.org",
 	"www":"https://www.fraubsd.org/nfsdtop",
@@ -42,6 +42,6 @@ WWW: https://www.fraubsd.org/nfsdtop",
 ////////////////////////////////////////////////////////////////////////////////
 //
 // $Copyright: 2016-2020 The FrauBSD Project. All rights reserved. $
-// $FrauBSD: nfsdtop/freebsd/MANIFEST 2020-06-28 12:00:25 -0700 freebsdfrau $
+// $FrauBSD: nfsdtop/freebsd/MANIFEST 2020-07-06 18:04:40 -0700 freebsdfrau $
 //
 ////////////////////////////////////////////////////////////////////////////////
