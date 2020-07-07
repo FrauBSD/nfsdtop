@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop.freebsd 2020-06-28 12:00:09 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop.freebsd 2020-07-06 18:04:26 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -25,7 +25,9 @@
 # 	OPS		Data operations (read vs write)
 # 	POST		dtrace post-processor (awk)
 # 	PRE		Start of pre-processor (sh)
+# 	SORTING		Sort routines
 # 	TRACEDATA	dtrace data generation and processing
+# 	VIEWDATA	View data generation
 # 	VIEWS		View processing
 #
 ############################################################ DEFAULTS
@@ -45,7 +47,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 6.1.1 $'
+VERSION='$Version: 6.1.2 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -822,6 +824,9 @@ EOF
 
 	function debug1(fmt,a1) { if (debugger) printf fmt "\n", a1 }
 	function debug2(fmt,a1,a2) { if (debugger) printf fmt "\n", a1, a2 }
+	function debug3(fmt,a1,a2,a3) {
+		if (debugger) printf fmt "\n", a1, a2, a3
+	}
 	function buffer_add(text) { BUFFER = BUFFER text }
 
 	function print_buffer()
@@ -951,7 +956,8 @@ EOF
 			vsz -= 0 + 1 # %-*s VIEW + space
 			vsz -= dsz # TOTAL
 			if (show_rw_columns) {
-				vsz -= 1 + dsz + 1 # space + WRITE(IN) + space
+				# space + WRITE(IN) + space
+				vsz -= 1 + dsz + 1
 				if (bar_size > 0) {
 					vsz -= bar_size + 1 # bar + space
 				}
@@ -997,19 +1003,21 @@ EOF
 			bar_size = int(bar_size / 2)
 			if (bar_size * 2 == full_bar) bar_size--
 			fmt = fmt " %*s" # write_bar
+			# read bar
 			if (color) {
-				fmt = fmt fgreset "|" cyan "%-*s" # read_bar
+				fmt = fmt fgreset "|" cyan "%-*s"
 			} else {
-				fmt = fmt "|%-*s" # read_bar
+				fmt = fmt "|%-*s"
 			}
 			fmtsz += 1 + bar_size + 1 + bar_size
 			fmt = fmt " %-" dsz "s" # READ(OUT)
 			fmtsz += 1 + dsz
 		} else if (show_rw_columns) {
+			# READ(OUT)
 			if (color) {
-				fmt = fmt " " cyan "%" dsz "s" # READ(OUT)
+				fmt = fmt " " cyan "%" dsz "s"
 			} else {
-				fmt = fmt " %" dsz "s" # READ(OUT)
+				fmt = fmt " %" dsz "s"
 			}
 			fmtsz += 1 + dsz
 		}
@@ -1060,8 +1068,8 @@ EOF
 		buffer_add_header()
 	}
 
-	function buffer_add1(arg1, total, read, read_bar, write_bar,
-		write, prefix, suffix,        str)
+	function buffer_add1(arg1, total, value1, bar1, bar2,
+		value2, prefix, suffix,        str)
 	{
 		if (redact && view == "USER") {
 			if (arg1 !~ unredacted_users)
@@ -1078,10 +1086,10 @@ EOF
 		}
 
 		if (show_bar_column) {
-			str = sprintf(fmt, arg1, total, write, bar_size,
-				write_bar, bar_size, read_bar, read)
+			str = sprintf(fmt, arg1, total, value2, bar_size,
+				bar2, bar_size, bar1, value1)
 		} else {
-			str = sprintf(fmt, arg1, total, write, read)
+			str = sprintf(fmt, arg1, total, value2, value1)
 		}
 		if (cols < fmtsz) {
 			str = substr(str, 1, cols) (str ~ /\n$/ ? "\n" : "")
@@ -1208,17 +1216,28 @@ EOF
 		#
 
 		if (map_op == "rd") {
+			debug2("++ map_view_read[%s] += %d",
+				map_view, map_value)
 			map_view_read[map_view] += map_value
+
+			debug3("++ map_key_read[%s, %s] += %d",
+				map_view, map_key, map_value)
 			map_key_read[map_view, map_key] = map_value
 		} else { # wr
+			debug2("++ map_view_write[%s] += %d",
+				map_view, map_value)
 			map_view_write[map_view] += map_value
+
+			debug3("++ map_key_write[%s, %s] += %d",
+				map_view, map_key, map_value)
 			map_key_write[map_view, map_key] = map_value
 		}
 
 		return 1
 	}
 
-	function humanize(value,        raw, n, suffix, suffixes)
+	function humanize(value,
+		raw, n, suffix, suffixes)
 	{
 		raw = value
 		n = split(",K,M,G,T,E", suffixes, /,/)
@@ -1332,18 +1351,22 @@ EOF
 			buffer_add("{" json_out "}\n")
 		} else if (show_bytes) {
 			# ST: VIEWS
-			buffer_add1("total", humanize(rw_total),
+			buffer_add1("total",
+				humanize(rw_total),
 				humanize(read_total), read_bar,
 				write_bar, humanize(write_total))
 		} else {
 			# ST: VIEWS
-			buffer_add1("total", humanize(rw_rate),
-				humanize(read_rate), read_bar,
-				write_bar, humanize(write_rate))
+			buffer_add1("total",
+				humanize(rw_rate),
+				humanize(read_rate),
+				read_bar, write_bar,
+				humanize(write_rate))
 		}
 
 		#
 		# Decorate combined read/write values
+		# ST: SORTING
 		#
 		load_keys(curview)
 		for (cred in _keys) {
@@ -1370,7 +1393,8 @@ EOF
 			color ? noinv nobold fgreset : ""))
 	}
 
-	function process_cred(curview, cred, read_total, write_total,
+	function process_cred(curview, cred,
+		read_total, write_total,
 		cred_read, read_bar, read_bar_pct, read_bar_size, read_rate,
 		cred_write, write_bar, write_bar_pct, write_bar_size,
 		write_rate, cred_rw, rw_rate, pch, _cred)
@@ -1447,12 +1471,14 @@ EOF
 			buffer_add("{" json_out "}\n")
 		} else if (show_bytes) {
 			# ST: VIEWDATA
-			buffer_add1(cred, humanize(cred_rw),
+			buffer_add1(cred,
+				humanize(cred_rw),
 				humanize(cred_read), read_bar,
 				write_bar, humanize(cred_write))
 		} else {
 			# ST: VIEWDATA
-			buffer_add1(cred, humanize(rw_rate),
+			buffer_add1(cred,
+				humanize(rw_rate),
 				humanize(read_rate), read_bar,
 				write_bar, humanize(write_rate))
 		}
