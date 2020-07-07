@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 7.0.1
+Version: 7.0.2
 Release: 1
 Buildarch: noarch
 
@@ -76,8 +76,10 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Mon Jul  6 2020 Devin Teske <dteske@fraubsd.org> 7.0.2-1
+- 63676a7 Minor changes
 * Mon Jul  6 2020 Devin Teske <dteske@fraubsd.org> 7.0.1-1
-- 7ec52dd Minor changes (Linux) [7.0.1]
+- 7ec52dd Minor changes
 * Sat Jul  4 2020 Devin Teske <dteske@fraubsd.org> 7.0-1
 - d89ce02 Add -m/-M for metadata mode, -k for sorting
 * Sun Jun 28 2020 Devin Teske <dteske@fraubsd.org> 6.1.1-1
