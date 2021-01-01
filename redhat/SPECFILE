@@ -9,7 +9,7 @@ Group: Applications/FrauBSD
 
 Summary: nfsdtop
 License: BSD
-Version: 7.0.3
+Version: 7.1
 Release: 1
 Buildarch: noarch
 
@@ -76,6 +76,8 @@ WWW: https://www.fraubsd.org/nfsdtop
 
 
 %changelog
+* Thu Dec 31 2020 Devin Teske <dteske@fraubsd.org> 7.1-1
+- 8ab4c13 Performance: collect only required data
 * Thu Dec 31 2020 Devin Teske <dteske@fraubsd.org> 7.0.3-1
 - 409abf1 Fix -k in/out to map to correct column
 * Mon Jul  6 2020 Devin Teske <dteske@fraubsd.org> 7.0.2-1
