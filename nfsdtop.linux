@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop.linux 2020-07-06 18:22:42 -0700 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop.linux 2020-12-31 17:47:59 -0800 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -60,7 +60,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 7.0.2 $'
+VERSION='$Version: 7.0.3 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -371,8 +371,8 @@ if [ "$MODE" = data ]; then
 	case "$SORT" in
 	"") usage "missing -k argument" ;; # NOTREACHED
 	[Tt][Oo][Tt][Aa][Ll]) SORT=total ;; # TOTAL
-	[Rr][Ee][Aa][Dd]|[Ii][Nn]) SORT=read ;; # READ(IN)
-	[Ww][Rr][Ii][Tt][Ee]|[Oo][Uu][Tt]) SORT=write ;; # WRITE(OUT)
+	[Rr][Ee][Aa][Dd]|[Oo][Uu][Tt]) SORT=read ;; # READ(IN)
+	[Ww][Rr][Ii][Tt][Ee]|[Ii][Nn]) SORT=write ;; # WRITE(OUT)
 	*) die "-k col must be one of: total read write in out"
 	esac
 elif [ "$MODE" = meta ]; then
@@ -387,8 +387,8 @@ elif [ "$MODE" = both ]; then
 	case "$SORT" in
 	"") usage "missing -k argument" ;; # NOTREACHED
 	[Tt][Oo][Tt][Aa][Ll]) SORT=total ;; # TOTAL
-	[Rr][Ee][Aa][Dd]|[Ii][Nn]) SORT=read ;; # READ(IN)
-	[Ww][Rr][Ii][Tt][Ee]|[Oo][Uu][Tt]) SORT=write ;; # WRITE(OUT)
+	[Rr][Ee][Aa][Dd]|[Oo][Uu][Tt]) SORT=read ;; # READ(IN)
+	[Ww][Rr][Ii][Tt][Ee]|[Ii][Nn]) SORT=write ;; # WRITE(OUT)
 	[Gg][Oo][Oo][Dd]) SORT=good ;; # STAT(GOOD)
 	[Ff][Aa][Ii][Ll]) SORT=fail ;; # STAT(FAIL)
 	*) die "-k col must be one of: total read write in out good fail"
