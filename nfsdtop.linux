@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020-2021 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop.linux 2021-01-04 16:03:50 -0800 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop.linux 2021-01-05 13:31:59 -0800 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -60,7 +60,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 8.0-alpha-1 $'
+VERSION='$Version: 8.0-alpha-2 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -934,14 +934,14 @@ ${MODE_DATA:+${NFS4:+
 		\$nfsd4_read = (struct nfsd4_read *)arg2;
 		@nfsd4_read_count[tid] = \$nfsd4_read->rd_length;
 ${NEED_CLIENT:+
-		\$data = (int64 *)\$rqst->rq_addr.__data;
+		\$data = (int64 *)\$rqstp->rq_addr.__data;
 		\$num = (int64)*\$data;
 		@nfsd4_read_client[tid] = \$num >> 16 & 0xFFFFFFFF;
 }
 ${NEED_SERVER:+
-		\$data = (int64 *)\$rqstp->rq_addr.__data;
+		\$data = (int64 *)\$rqstp->rq_daddr.__data;
 		\$num = (int64)*\$data;
-		@nfsd4_read_client[tid] = \$num >> 16 & 0xFFFFFFFF;
+		@nfsd4_read_server[tid] = \$num >> 16 & 0xFFFFFFFF;
 }
 	$CB
 
