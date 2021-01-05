@@ -4,7 +4,7 @@
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
 # $Copyright: 2020-2021 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop.linux 2021-01-05 13:31:59 -0800 freebsdfrau $
+# $FrauBSD: nfsdtop/nfsdtop.linux 2021-01-05 15:07:38 -0800 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -60,7 +60,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 8.0-alpha-2 $'
+VERSION='$Version: 8.0-alpha-3 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -932,6 +932,9 @@ ${MODE_DATA:+${NFS4:+
 		\$rqstp = (struct svc_rqst *)arg0;
 		@nfsd4_read_rqstp[tid] = \$rqstp;
 		\$nfsd4_read = (struct nfsd4_read *)arg2;
+${VIEW_FILE:+
+		@nfsd4_readp[tid] = \$nfsd4_read;
+}
 		@nfsd4_read_count[tid] = \$nfsd4_read->rd_length;
 ${NEED_CLIENT:+
 		\$data = (int64 *)\$rqstp->rq_addr.__data;
@@ -949,6 +952,9 @@ ${NEED_SERVER:+
 	/@nfsd4_read_rqstp[tid] != 0/
 	{
 		\$rqstp = @nfsd4_read_rqstp[tid];
+${VIEW_FILE:+
+		\$readp = @nfsd4_readp[tid];
+}
 ${NEED_USER:+
 		\$uid = \$rqstp->rq_cred.cr_uid.val;
 }
@@ -975,6 +981,9 @@ ${NEED_SERVER:+
 }
 
 		delete(@nfsd4_read_rqstp[tid]);
+${VIEW_FILE:+
+		delete(@nfsd4_readp[tid]);
+}
 
 		\$filtered = 0;
 
@@ -999,6 +1008,16 @@ ${FILTER_USER:+
 			// ST: VIEWS TRACEDATA
 ${VIEW_CLIENT:+
 			@rd_client[ntop(AF_INET, \$client_ip4)] = sum(\$bytes);
+}
+
+${VIEW_FILE:+
+			\$file = \$readp->rd_filp;
+			\$de = \$file->f_dentry;
+			\$n1 = \$de->d_name.name;
+			\$de = \$de->d_parent;
+			\$n2 = \$de->d_name.name;
+
+			@rd_file[str(\$n2), str(\$n1)] = sum(\$bytes);
 }
 
 ${VIEW_GROUP:+
@@ -1253,9 +1272,13 @@ ${VIEW_CLIENT:+
 ${VIEW_FILE:+
 	${MODE_DATA:+
 		print(@rd_file);
-		print(@wr_file);
+		${NFS3:+
+			print(@wr_file);
+		}
 		clear(@rd_file);
-		clear(@wr_file);
+		${NFS3:+
+			clear(@wr_file);
+		}
 	}
 	${MODE_META:+
 		print(@stat_fail_file);
@@ -1326,10 +1349,14 @@ ${VIEW_CLIENT:+
 }
 ${VIEW_FILE:+
 	${MODE_DATA:+
-		clear(@nfsd_read_filep);
-		clear(@nfsd_write_filep);
+		${NFS3:+
+			clear(@nfsd_read_filep);
+			clear(@nfsd_write_filep);
+		}
 		clear(@rd_file);
-		clear(@wr_file);
+		${NFS3:+
+			clear(@wr_file);
+		}
 	}
 	${MODE_META:+
 		clear(@nfsd_getattr_filep);
@@ -1385,6 +1412,9 @@ ${NEED_SERVER:+
 ${MODE_DATA:+${NFS4:+
 		clear(@nfsd4_read_count);
 		clear(@nfsd4_read_rqstp);
+${VIEW_FILE:+
+		clear(@nfsd4_readp);
+}
 		clear(@nfsd4_write_count);
 		clear(@nfsd4_write_rqstp);
 ${NEED_CLIENT:+
