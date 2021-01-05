@@ -3,8 +3,8 @@
 ############################################################ IDENT(1)
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
-# $Copyright: 2020 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop.linux 2020-12-31 17:54:42 -0800 freebsdfrau $
+# $Copyright: 2020-2021 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/nfsdtop.linux 2021-01-04 16:03:50 -0800 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -60,7 +60,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 7.1 $'
+VERSION='$Version: 8.0-alpha-1 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -120,6 +120,8 @@ NEED_CLIENT=
 NEED_GROUP=
 NEED_SERVER=
 NEED_USER=
+NFS3=1
+NFS4=1
 VIEW=
 
 ############################################################ FUNCTIONS
@@ -268,8 +270,10 @@ resize()
 #
 # Process command-line options
 #
-while getopts abC:cDdF:fG:ghi:Jjk:MmN:noP:p:qRrS:sU:uvw flag; do
+while getopts 34abC:cDdF:fG:ghi:Jjk:MmN:noP:p:qRrS:sU:uvw flag; do
 	case "$flag" in
+	3) NFS3=1 NFS4= ;;
+	4) NFS4=1 NFS3= ;;
 	a) COLOR=1 ;;
 	b) SHOW_BASIC=1 ;;
 	C) FILTER_CLIENT="$OPTARG" ;;
@@ -613,6 +617,54 @@ esac
 
 	#include <linux/sunrpc/svc.h>
 
+${NFS4:+
+	#include <linux/nfs4.h>
+}
+
+	////////////////////////////////////////////////// INTERFACE
+
+${NFS4:+
+	struct clientid {
+	        u32             cl_boot;
+	        u32             cl_id;
+	$CB;
+
+	struct stateid_opaque {
+	        struct clientid so_clid;
+	        u32             so_id;
+	$CB;
+
+	struct stateid {
+	        u32                     si_generation;
+	        struct stateid_opaque   si_opaque;
+	$CB;
+
+	struct nfsd4_read {
+	        struct stateid  rd_stateid;         /* request */
+	        u64             rd_offset;          /* request */
+	        u32             rd_length;          /* request */
+	        int             rd_vlen;
+	        struct file     *rd_filp;
+	        bool            rd_tmp_file;
+
+	        struct svc_rqst *rd_rqstp;          /* response */
+	        struct svc_fh   *rd_fhp;            /* response */
+	$CB;
+
+	struct nfsd4_write {
+	        struct stateid  wr_stateid;         /* request */
+	        u64             wr_offset;          /* request */
+	        u32             wr_stable_how;      /* request */
+	        u32             wr_buflen;          /* request */
+	        struct kvec     wr_head;
+	        struct page **  wr_pagelist;        /* request */
+
+	        u32             wr_bytes_written;   /* response */
+	        u32             wr_how_written;     /* response */
+	        nfs4_verifier   wr_verifier;        /* response */
+	$CB;
+}
+
 	////////////////////////////////////////////////// BEGIN
 
 	BEGIN
@@ -761,7 +813,7 @@ ${VIEW_USER:+
 	 * read(2) probes
 	 */
 
-${MODE_DATA:+
+${MODE_DATA:+${NFS3:+
 	kprobe:nfsd_read
 	{
 		\$rqstp = (struct svc_rqst *)arg0;
@@ -872,7 +924,99 @@ ${VIEW_FILE:+
 		delete(@nfsd_read_filep[tid]);
 }
 	$CB
+}}
+
+${MODE_DATA:+${NFS4:+
+	kprobe:nfsd4_read
+	{
+		\$rqstp = (struct svc_rqst *)arg0;
+		@nfsd4_read_rqstp[tid] = \$rqstp;
+		\$nfsd4_read = (struct nfsd4_read *)arg2;
+		@nfsd4_read_count[tid] = \$nfsd4_read->rd_length;
+${NEED_CLIENT:+
+		\$data = (int64 *)\$rqst->rq_addr.__data;
+		\$num = (int64)*\$data;
+		@nfsd4_read_client[tid] = \$num >> 16 & 0xFFFFFFFF;
 }
+${NEED_SERVER:+
+		\$data = (int64 *)\$rqstp->rq_addr.__data;
+		\$num = (int64)*\$data;
+		@nfsd4_read_client[tid] = \$num >> 16 & 0xFFFFFFFF;
+}
+	$CB
+
+	kretprobe:nfsd4_read
+	/@nfsd4_read_rqstp[tid] != 0/
+	{
+		\$rqstp = @nfsd4_read_rqstp[tid];
+${NEED_USER:+
+		\$uid = \$rqstp->rq_cred.cr_uid.val;
+}
+${NEED_GROUP:+
+		\$gid = \$rqstp->rq_cred.cr_gid.val;
+}
+
+${NEED_CLIENT:+
+		\$client_ip4 = @nfsd4_read_client[tid];
+		\$client_ip4num = (uint32)(\$client_ip4 >> 24 |
+			(\$client_ip4 >> 16 & 0xFF) << 8 |
+			(\$client_ip4 >> 8 & 0xFF) << 16 |
+			(\$client_ip4 & 0xFF) << 24);
+		delete(@nfsd4_read_client[tid]);
+}
+
+${NEED_SERVER:+
+		\$server_ip4 = @nfsd4_read_server[tid];
+		\$server_ip4num = (uint32)(\$server_ip4 >> 24 |
+			(\$server_ip4 >> 16 & 0xFF) << 8 |
+			(\$server_ip4 >> 8 & 0xFF) << 16 |
+			(\$server_ip4 & 0xFF) << 24);
+		delete(@nfsd4_read_server[tid]);
+}
+
+		delete(@nfsd4_read_rqstp[tid]);
+
+		\$filtered = 0;
+
+		// ST: FILTERS
+${FILTER_CLIENT:+
+		if (\$client_ip4num != $FILTER_CLIENT) { \$filtered = 1; $CB
+}
+${FILTER_GROUP:+
+		if (\$gid != $FILTER_GROUP) { \$filtered = 1; $CB
+}
+${FILTER_SERVER:+
+		if (\$server_ip4num != $FILTER_SERVER) { \$filtered =1; $CB
+}
+${FILTER_USER:+
+		if (\$uid != $FILTER_USER) { \$filtered = 1; $CB
+}
+
+		if (\$filtered == 0)
+		{
+			\$bytes = @nfsd4_read_count[tid];
+
+			// ST: VIEWS TRACEDATA
+${VIEW_CLIENT:+
+			@rd_client[ntop(AF_INET, \$client_ip4)] = sum(\$bytes);
+}
+
+${VIEW_GROUP:+
+			@rd_group[\$gid] = sum(\$bytes);
+}
+
+${VIEW_SERVER:+
+			@rd_server[ntop(AF_INET, \$server_ip4)] = sum(\$bytes);
+}
+
+${VIEW_USER:+
+			@rd_user[\$uid] = sum(\$bytes);
+}
+		$CB
+
+		delete(@nfsd4_read_count[tid]);
+	$CB
+}}
 
 	////////////////////////////////////////////////// WRITE PROBES
 
@@ -880,7 +1024,7 @@ ${VIEW_FILE:+
 	 * write(2) probes
 	 */
 
-${MODE_DATA:+
+${MODE_DATA:+${NFS3:+
 	kprobe:nfsd_write
 	{
 		\$rqstp = (struct svc_rqst *)arg0;
@@ -991,7 +1135,99 @@ ${VIEW_FILE:+
 		delete(@nfsd_write_filep[tid]);
 }
 	$CB
+}}
+
+${MODE_DATA:+${NFS4:+
+	kprobe:nfsd4_write
+	{
+		\$rqstp = (struct svc_rqst *)arg0;
+		@nfsd4_write_rqstp[tid] = \$rqstp;
+		\$nfsd4_write = (struct nfsd4_write *)arg2;
+		@nfsd4_write_count[tid] = \$nfsd4_write->wr_bytes_written;
+${NEED_CLIENT:+
+		\$data = (int64 *)\$rqstp->rq_addr.__data;
+		\$num = (int64)*\$data;
+		@nfsd4_write_client[tid] = \$num >> 16 & 0xFFFFFFFF;
 }
+${NEED_SERVER:+
+		\$data = (int64 *)\$rqstp->rq_daddr.__data;
+		\$num = (int64)*\$data;
+		@nfsd4_write_server[tid] = \$num >> 16 & 0xFFFFFFFF;
+}
+	$CB
+
+	kretprobe:nfsd4_write
+	/@nfsd4_write_rqstp[tid] != 0/
+	{
+		\$rqstp = @nfsd4_write_rqstp[tid];
+${NEED_USER:+
+		\$uid = \$rqstp->rq_cred.cr_uid.val;
+}
+${NEED_GROUP:+
+		\$gid = \$rqstp->rq_cred.cr_gid.val;
+}
+
+${NEED_CLIENT:+
+		\$client_ip4 = @nfsd4_write_client[tid];
+		\$client_ip4num = (uint32)(\$client_ip4 >> 24 |
+			(\$client_ip4 >> 16 & 0xFF) << 8 |
+			(\$client_ip4 >> 8 & 0xFF) << 16 |
+			(\$client_ip4 & 0xFF) << 24);
+		delete(@nfsd4_write_client[tid]);
+}
+
+${NEED_SERVER:+
+		\$server_ip4 = @nfsd4_write_server[tid];
+		\$server_ip4num = (uint32)(\$server_ip4 >> 24 |
+			(\$server_ip4 >> 16 & 0xFF) << 8 |
+			(\$server_ip4 >> 8 & 0xFF) << 16 |
+			(\$server_ip4 & 0xFF) << 24);
+		delete(@nfsd4_write_server[tid]);
+}
+
+		delete(@nfsd4_write_rqstp[tid]);
+
+		\$filtered = 0;
+
+		// ST: FILTERS
+${FILTER_CLIENT:+
+		if (\$client_ip4num != $FILTER_CLIENT) { \$filtered = 1; $CB
+}
+${FILTER_GROUP:+
+		if (\$gid != $FILTER_GROUP) { \$filtered = 1; $CB
+}
+${FILTER_SERVER:+
+		if (\$server_ip4num != $FILTER_SERVER) { \$filtered = 1; $CB
+}
+${FILTER_USER:+
+		if (\$uid != $FILTER_USER) { \$filtered = 1; $CB
+}
+
+		if (\$filtered == 0)
+		{
+			\$bytes = @nfsd4_write_count[tid];
+
+			// ST: VIEWS TRACEDATA
+${VIEW_CLIENT:+
+			@wr_client[ntop(AF_INET, \$client_ip4)] = sum(\$bytes);
+}
+
+${VIEW_GROUP:+
+			@wr_group[\$gid] = sum(\$bytes);
+}
+
+${VIEW_SERVER:+
+			@wr_server[ntop(AF_INET, \$server_ip4)] = sum(\$bytes);
+}
+
+${VIEW_USER:+
+			@wr_user[\$uid] = sum(\$bytes);
+}
+		$CB
+
+		delete(@nfsd4_write_count[tid]);
+	$CB
+}}
 
 	////////////////////////////////////////////////// INTERVAL PROBE
 
@@ -1132,7 +1368,7 @@ ${VIEW_SERVER:+
 	}
 }
 
-${MODE_DATA:+
+${MODE_DATA:+${NFS3:+
 		clear(@nfsd_read_countp);
 		clear(@nfsd_read_rqstp);
 		clear(@nfsd_write_countp);
@@ -1145,7 +1381,21 @@ ${NEED_SERVER:+
 		clear(@nfsd_read_server);
 		clear(@nfsd_write_server);
 }
+}}
+${MODE_DATA:+${NFS4:+
+		clear(@nfsd4_read_count);
+		clear(@nfsd4_read_rqstp);
+		clear(@nfsd4_write_count);
+		clear(@nfsd4_write_rqstp);
+${NEED_CLIENT:+
+		clear(@nfsd4_read_client);
+		clear(@nfsd4_write_client);
 }
+${NEED_SERVER:+
+		clear(@nfsd4_read_server);
+		clear(@nfsd4_write_server);
+}
+}}
 ${MODE_META:+
 		clear(@nfsd_getattr_rqstp);
 ${NEED_CLIENT:+
