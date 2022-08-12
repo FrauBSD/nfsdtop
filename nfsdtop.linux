@@ -3,8 +3,8 @@
 ############################################################ IDENT(1)
 #
 # $Title: Script to generate top-like statistics for nfsd I/O $
-# $Copyright: 2020-2021 Devin Teske. All rights reserved. $
-# $FrauBSD: nfsdtop/nfsdtop.linux 2021-01-05 15:07:38 -0800 freebsdfrau $
+# $Copyright: 2020-2022 Devin Teske. All rights reserved. $
+# $FrauBSD: nfsdtop/nfsdtop.linux 2022-08-11 17:39:04 -0700 freebsdfrau $
 #
 ############################################################ INFORMATION
 #
@@ -60,7 +60,7 @@ DEFAULT_IP_MAP=.nfsd.hosts
 
 ############################################################ GLOBALS
 
-VERSION='$Version: 8.0-alpha-3 $'
+VERSION='$Version: 8.0-alpha-4 $'
 
 pgm="${0##*/}" # Program basename
 
@@ -740,7 +740,7 @@ ${NEED_SERVER:+
 
 ${VIEW_FILE:+
 		\$file = @nfsd_getattr_filep[tid];
-		\$de = \$file->f_dentry;
+		\$de = \$file->f_path.dentry;
 		\$n1 = \$de->d_name.name;
 		\$de = \$de->d_parent;
 		\$n2 = \$de->d_name.name;
@@ -898,7 +898,7 @@ ${VIEW_CLIENT:+
 
 ${VIEW_FILE:+
 			\$file = @nfsd_read_filep[tid];
-			\$de = \$file->f_dentry;
+			\$de = \$file->f_path.dentry;
 			\$n1 = \$de->d_name.name;
 			\$de = \$de->d_parent;
 			\$n2 = \$de->d_name.name;
@@ -1012,7 +1012,7 @@ ${VIEW_CLIENT:+
 
 ${VIEW_FILE:+
 			\$file = \$readp->rd_filp;
-			\$de = \$file->f_dentry;
+			\$de = \$file->f_path.dentry;
 			\$n1 = \$de->d_name.name;
 			\$de = \$de->d_parent;
 			\$n2 = \$de->d_name.name;
@@ -1128,7 +1128,7 @@ ${VIEW_CLIENT:+
 
 ${VIEW_FILE:+
 			\$file = @nfsd_write_filep[tid];
-			\$de = \$file->f_dentry;
+			\$de = \$file->f_path.dentry;
 			\$n1 = \$de->d_name.name;
 			\$de = \$de->d_parent;
 			\$n2 = \$de->d_name.name;
