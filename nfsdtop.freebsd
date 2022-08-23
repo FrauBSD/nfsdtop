@@ -8,7 +8,7 @@
 #
 ############################################################ INFORMATION
 #
-# In nfsdtop, a ``view'' is the user's choice between -c, -g, -s, or -u.
+# In nfsdtop, a ``view'' is the user's choice between -c, -g, or -u.
 # For example, `-u' asks nfsdtop to display the ``user view'' where statistics
 # displayed are on a per-user basis.
 #
